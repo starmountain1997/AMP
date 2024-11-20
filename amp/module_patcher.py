@@ -39,4 +39,4 @@ def when_imported(fullname: str):
     return decorator
 
 
-sys.meta_path.append(0, PostImportFinder())
+sys.meta_path.insert(0, PostImportFinder())

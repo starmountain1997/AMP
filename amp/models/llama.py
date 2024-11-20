@@ -4,7 +4,6 @@ from typing import Optional, Tuple
 import torch
 import torch.nn.functional as F
 import torch_npu
-import transformers
 from torch import nn
 from transformers.cache_utils import Cache
 from transformers.models.llama.modeling_llama import (LlamaAttention,
@@ -219,7 +218,7 @@ NPU_LLAMA_ATTENTION_CLASSES = {
 
 
 @when_imported("transformers")
-def patch_llama():
-    transformers.models.llama.modeling_llama.RMSNorm = OmNpuRMSNorm
-    transformers.models.llama.modeling_llama.apply_rotary_pos_emb = npu_apply_rotary_pos_emb
-    transformers.models.llama.modeling_llama.NPU_LLAMA_ATTENTION_CLASSES = NPU_LLAMA_ATTENTION_CLASSES
+def patch_llama(mod):
+    mod.models.llama.modeling_llama.LlamaRMSNorm = OmNpuRMSNorm
+    mod.models.llama.modeling_llama.apply_rotary_pos_emb = npu_apply_rotary_pos_emb
+    mod.models.llama.modeling_llama.LLAMA_ATTENTION_CLASSES = NPU_LLAMA_ATTENTION_CLASSES
