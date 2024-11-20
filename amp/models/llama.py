@@ -11,6 +11,7 @@ from transformers.models.llama.modeling_llama import (LlamaAttention, LlamaFlash
                                                       LlamaSdpaAttention, LlamaConfig,
                                                       LlamaRMSNorm, repeat_kv)
 from transformers.utils import logging
+import importlib
 
 logger = logging.get_logger(__name__)
 
@@ -217,3 +218,4 @@ def patch_llama_attention():
     """
     transformers.models.llama.modeling_llama.RMSNorm = OmNpuRMSNorm
     transformers.models.llama.modeling_llama.NPU_LLAMA_ATTENTION_CLASSES = NPU_LLAMA_ATTENTION_CLASSES
+    importlib.reload(transformers.models.llama.modeling_llama)
