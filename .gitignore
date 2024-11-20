@@ -1,1 +1,29 @@
+# Byte-compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Build directories
+build/
+dist/
+*.egg-info/
+
+# Packaging artifacts
+*.egg
+*.wheel
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environments
+venv/
+.env/
+
+# Editor-specific files
+.vscode/
+
 run_on_save.sh

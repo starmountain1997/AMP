@@ -1,17 +1,21 @@
 import math
 from typing import Optional, Tuple
-import transformers
 
 import torch
 import torch.nn.functional as F
 import torch_npu
+import transformers
 from torch import nn
 from transformers.cache_utils import Cache
-from transformers.models.llama.modeling_llama import (LlamaAttention, LlamaFlashAttention2,
-                                                      LlamaSdpaAttention, LlamaConfig,
-                                                      LlamaRMSNorm, repeat_kv)
+from transformers.models.llama.modeling_llama import (LlamaAttention,
+                                                      LlamaConfig,
+                                                      LlamaFlashAttention2,
+                                                      LlamaRMSNorm,
+                                                      LlamaSdpaAttention,
+                                                      repeat_kv)
 from transformers.utils import logging
-import importlib
+
+from ..module_patcher import when_imported
 
 logger = logging.get_logger(__name__)
 
@@ -206,16 +210,16 @@ class NPULlamaAttention(LlamaAttention):
 
         return attn_output, attn_weights, past_key_value
 
+
 NPU_LLAMA_ATTENTION_CLASSES = {
     "eager": NPULlamaAttention,
     "flash_attention_2": LlamaFlashAttention2,
     "sdpa": LlamaSdpaAttention,
 }
 
-def patch_llama_attention():
-    """
-    Patch the LlamaAttention class to use the NPU-specific RMSNorm and attention classes.
-    """
+
+@when_imported("transformers")
+def patch_llama():
     transformers.models.llama.modeling_llama.RMSNorm = OmNpuRMSNorm
+    transformers.models.llama.modeling_llama.apply_rotary_pos_emb = npu_apply_rotary_pos_emb
     transformers.models.llama.modeling_llama.NPU_LLAMA_ATTENTION_CLASSES = NPU_LLAMA_ATTENTION_CLASSES
-    importlib.reload(transformers.models.llama.modeling_llama)
