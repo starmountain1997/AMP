@@ -1,2 +1,3 @@
+from .llama import patch_llama
 
-__all__ = ["llama_patch"]
+__all__ = ["patch_llama"]
