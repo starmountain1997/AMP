@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 
 setup(
     name="AMP",                  # Name of your package
-    version="0.0.1",                           # Package version
+    version="0.0.2",                           # Package version
     description="ascend model patcher",
     long_description=open("README.md").read(),  # Long description from README
     long_description_content_type="text/markdown",  # Description format
