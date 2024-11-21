@@ -5,7 +5,11 @@ from collections import defaultdict
 # https://peps.python.org/pep-0369/
 
 _post_import_hooks = defaultdict(list)
-_target_modules = {"transformers.models.llama.modeling_llama", "transformers.models.qwen2.modeling_qwen2"}  # Whitelist of modules to monitor for post-import hooks
+_target_modules = {
+    "transformers.models.llama.modeling_llama",
+    "transformers.models.qwen2.modeling_qwen2",
+    "deepspeed.ops.op_builder"
+}  # Whitelist of modules to monitor for post-import hooks
 
 
 class PostImportFinder:
