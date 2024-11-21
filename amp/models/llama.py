@@ -221,4 +221,5 @@ NPU_LLAMA_ATTENTION_CLASSES = {
 def patch_llama(mod):
     mod.models.llama.modeling_llama.LlamaRMSNorm = OmNpuRMSNorm
     mod.models.llama.modeling_llama.apply_rotary_pos_emb = npu_apply_rotary_pos_emb
-    mod.models.llama.modeling_llama.LLAMA_ATTENTION_CLASSES = NPU_LLAMA_ATTENTION_CLASSES
+    # mod.models.llama.modeling_llama.LLAMA_ATTENTION_CLASSES = NPU_LLAMA_ATTENTION_CLASSES
+    logger.info("patched llama")
