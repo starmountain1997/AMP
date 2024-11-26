@@ -8,7 +8,9 @@ _post_import_hooks = defaultdict(list)
 _target_modules = {
     "transformers.models.llama.modeling_llama",
     "transformers.models.qwen2.modeling_qwen2",
-    "deepspeed.ops.op_builder"
+    # "transformers.generation.logits_process",
+    "transformers.dynamic_module_utils",
+    "deepspeed.ops.op_builder",
 }  # Whitelist of modules to monitor for post-import hooks
 
 

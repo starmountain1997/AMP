@@ -1,9 +1,8 @@
 import os
 
-import deepspeed
 import torch
 from deepspeed.ops.op_builder.builder import (WARNING, cuda_minor_mismatch_ok,
-                                      installed_cuda_version)
+                                              installed_cuda_version)
 
 from ..module_patcher import when_imported
 

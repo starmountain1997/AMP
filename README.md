@@ -1,6 +1,23 @@
 # AscendModelPatcher
 
-## llama
+## installation
+
+### install with deepspeed
+```bash
+pip install git+https://github.com/starmountain1997/AMP.git#egg=AMP[deepspeed]
+```
+
+### local install
+
+```shell
+# use bash
+pip install -e .[deepspeed]
+# use zsh
+pip install .\[deepspeed\]
+```
+
+
+## usage
 
 ```python
 import time

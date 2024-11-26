@@ -25,5 +25,8 @@ venv/
 
 # Editor-specific files
 .vscode/
-
-run_on_save.sh
+tests/
+*.log
+*.html
+*.out
+*.xlsx
