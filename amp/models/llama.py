@@ -9,7 +9,7 @@ from transformers.cache_utils import Cache
 from transformers.models.llama.modeling_llama import repeat_kv
 from transformers.utils import logging
 
-from ..module_patcher import when_imported
+from amp.module_patcher import when_imported
 
 logger = logging.get_logger(__name__)
 

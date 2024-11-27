@@ -9,7 +9,7 @@ from transformers.generation.stopping_criteria import (
     STOPPING_CRITERIA_INPUTS_DOCSTRING, EosTokenCriteria)
 from transformers.utils.doc import add_start_docstrings
 
-from ..module_patcher import when_imported
+from amp.module_patcher import when_imported
 
 # 算子缺失
 # https://gitee.com/ascend/pytorch/issues/I9JGYU?from=project-issue

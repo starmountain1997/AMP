@@ -7,7 +7,8 @@ import torch_npu
 import torch_npu.npu
 from loguru import logger
 
-from ..module_patcher import patch_get_class_in_module, when_imported
+from amp.common.transformers import patch_get_class_in_module
+from amp.module_patcher import when_imported
 
 
 @torch.jit.script
