@@ -1,16 +1,13 @@
-import importlib
-import os
-from pathlib import Path
-from typing import Type, Union
+
+from functools import partial
 
 import torch
 import torch.nn.functional as F
 import torch_npu
 import torch_npu.npu
 from loguru import logger
-from transformers.utils import HF_MODULES_CACHE
 
-from ..module_patcher import when_imported
+from ..module_patcher import patch_get_class_in_module, when_imported
 
 
 @torch.jit.script
@@ -163,34 +160,17 @@ def patch_core_attention_forward(
     return context_layer
 
 
-def patch_get_class_in_module(
-        class_name: str, module_path: Union[str, os.PathLike]) -> Type:
-    """
-    Import a module on the cache directory for modules and extract a class from it.
-
-    Args:
-        class_name (`str`): The name of the class to import.
-        module_path (`str` or `os.PathLike`): The path to the module to import.
-
-    Returns:
-        `typing.Type`: The class looked for.
-    """
-    name = os.path.normpath(module_path).replace(
-        ".py", "").replace(
-        os.path.sep, ".")
-    module_path = str(Path(HF_MODULES_CACHE) / module_path)
-    module = importlib.machinery.SourceFileLoader(
-        name, module_path).load_module()
+def _patch_chatglm(mod, name):
     package_name = name.split(".")[-1]
     if package_name == "modeling_chatglm":
-        logger.info(f"{module} is patched.")
-        module.RMSNorm.forward = patch_rms_norm_forward
-        module.CoreAttention.forward = patch_core_attention_forward
-        module.apply_rotary_pos_emb = addmm_apply_rotary_pos_emb
-        module.MLP.activation_func = lambda x: torch_npu.npu_swiglu(x, dim=-1)
-    return getattr(module, class_name)
+        logger.info(f"{mod} is patched.")
+        mod.RMSNorm.forward = patch_rms_norm_forward
+        mod.CoreAttention.forward = patch_core_attention_forward
+        mod.apply_rotary_pos_emb = addmm_apply_rotary_pos_emb
+        mod.MLP.activation_func = lambda x: torch_npu.npu_swiglu(x, dim=-1)
 
 
 @when_imported("transformers")
 def patch_chatglm(mod):
-    mod.dynamic_module_utils.get_class_in_module = patch_get_class_in_module
+    mod.dynamic_module_utils.get_class_in_module = partial(
+        patch_get_class_in_module, func=_patch_chatglm)
