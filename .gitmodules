@@ -13,3 +13,6 @@
 [submodule "supported_models/cogagent-chat-hf"]
 	path = supported_models/cogagent-chat-hf
 	url = https://modelers.cn/openMind-ecosystem/cogagent-chat-hf.git
+[submodule "supported_models/CodeQwen1.5-7B"]
+	path = supported_models/CodeQwen1.5-7B
+	url = https://modelers.cn/openMind-ecosystem/CodeQwen1.5-7B.git

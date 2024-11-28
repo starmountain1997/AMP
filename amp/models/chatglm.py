@@ -9,7 +9,8 @@ from loguru import logger
 
 from amp.common.transformers import patch_get_class_in_module
 from amp.module_patcher import when_imported
-
+from amp.models.ops import NPUMinLengthLogitsProcessor, NPUMinNewTokensLengthLogitsProcessor, NPUSuppressTokensAtBeginLogitsProcessor, NPUSuppressTokensLogitsProcessor, NPUEosTokenCriteria
+from amp.models.ops import npu_isin
 
 @torch.jit.script
 def addmm_apply_rotary_pos_emb(x: torch.Tensor,
@@ -67,17 +68,17 @@ def patch_core_attention_forward(
         query_layer.size(1),
         query_layer.size(2),
         key_layer.size(2))
-
     # [b, np, sq, hn] -> [b * np, sq, hn]
     query_layer = query_layer.view(
         output_size[0] * output_size[1], output_size[2], -1)
     # [b, np, sk, hn] -> [b * np, sk, hn]
     key_layer = torch_npu.npu_confusion_transpose(
         key_layer,
-        (0, 2, 1, 3),
-        (output_size[0] * output_size[1], output_size[3], output_size[2]),
+        (0, 2, 1),
+        (output_size[0] * output_size[1], output_size[3], key_layer.size(3)), # FIXME:
         transpose_first=False
     )
+    # key_layer = key_layer.view(output_size[0] * output_size[1], output_size[3], -1).transpose(1, 2)
 
     # preallocting input tensor: [b * np, sq, sk]
     matmul_input_buffer = torch.empty(
@@ -175,3 +176,4 @@ def _patch_chatglm(mod, name):
 def patch_chatglm(mod):
     mod.dynamic_module_utils.get_class_in_module = partial(
         patch_get_class_in_module, func=_patch_chatglm)
+
