@@ -1,0 +1,3 @@
+[submodule "supported_models/Yi-6B"]
+	path = supported_models/Yi-6B
+	url = https://modelers.cn/openMind-ecosystem/Yi-6B.git
