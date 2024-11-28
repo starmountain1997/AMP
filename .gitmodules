@@ -1,9 +1,0 @@
-[submodule "amp/models/transformers_modules/cogvlm2-llama3-chat-19B"]
-	path = amp/models/transformers_modules/cogvlm2-llama3-chat-19B
-	url = https://modelers.cn/openMind-ecosystem/cogvlm2-llama3-chat-19B.git
-[submodule "amp/supported_models/Yi-6B"]
-	path = amp/supported_models/Yi-6B
-	url = https://modelers.cn/openMind-ecosystem/Yi-6B.git
-[submodule "amp/supported_models/Yi-1.5-9b-chat"]
-	path = amp/supported_models/Yi-1.5-9b-chat
-	url = https://modelers.cn/openMind-ecosystem/Yi-1.5-9b-chat.git
