@@ -1,7 +1,7 @@
 import importlib
+import os.path as osp
 import sys
 from collections import defaultdict
-import os.path as osp
 
 # https://peps.python.org/pep-0369/
 
@@ -52,8 +52,6 @@ class PostImportLoader:
 
         # Remove the module from the skip list
         self._finder._skip.remove(fullname)
-
-
 
 
 def when_imported(fullname):

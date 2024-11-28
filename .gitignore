@@ -30,3 +30,5 @@ tests/
 *.html
 *.out
 *.xlsx
+
+amp/supported_models/*/*.safetensors
