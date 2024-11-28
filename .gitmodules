@@ -1,3 +1,15 @@
 [submodule "supported_models/Yi-6B"]
 	path = supported_models/Yi-6B
 	url = https://modelers.cn/openMind-ecosystem/Yi-6B.git
+[submodule "supported_models/Yi-1.5-9b-chat"]
+	path = supported_models/Yi-1.5-9b-chat
+	url = https://modelers.cn/openMind-ecosystem/Yi-1.5-9b-chat.git
+[submodule "supported_models/cogvlm2-llama3-chat-19B"]
+	path = supported_models/cogvlm2-llama3-chat-19B
+	url = https://modelers.cn/openMind-ecosystem/cogvlm2-llama3-chat-19B.git
+[submodule "supported_models/codegeex4-all-9b"]
+	path = supported_models/codegeex4-all-9b
+	url = https://modelers.cn/openMind-ecosystem/codegeex4-all-9b.git
+[submodule "supported_models/cogagent-chat-hf"]
+	path = supported_models/cogagent-chat-hf
+	url = https://modelers.cn/openMind-ecosystem/cogagent-chat-hf.git
