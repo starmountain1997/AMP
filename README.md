@@ -24,7 +24,7 @@ import time
 
 from tqdm import tqdm
 from transformers import pipeline
-
+from amp.models.llama import patch_llama
 
 def main(use_amp=False):
     if use_amp:
@@ -69,3 +69,6 @@ GIT_LFS_SKIP_SMUDGE=1 git submodule add https://modelers.cn/openMind-ecosystem/Y
 ```bash
 GIT_LFS_SKIP_SMUDGE=1 git submodule update --init --recursive
 ```
+
+## notice
+- `transformers.dynamic_module_utils.get_class_in_module` 在 0.45.0 有较大变动，请注意。
