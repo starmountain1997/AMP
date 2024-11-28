@@ -16,5 +16,5 @@ def _patch_cogvlm(mod, name):
 @when_imported("transformers")
 def patch_cogvlm(mod):
     mod.dynamic_module_utils.get_class_in_module = partial(
-        patch_get_class_in_module, func=_patch_cogvlm)
+        patch_get_class_in_module, func=_patch_cogvlm, amp_patch=True)
     mod.dynamic_module_utils.create_dynamic_module = patch_create_dynamic_module

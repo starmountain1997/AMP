@@ -10,7 +10,7 @@ import os.path as osp
 from amp.module_patcher import AMP_DIR
 
 def patch_get_class_in_module(
-        class_name: str, module_path: Union[str, os.PathLike], func: Callable) -> Type:
+        class_name: str, module_path: Union[str, os.PathLike], func: Callable, amp_patch: bool = False) -> Type:
     """
     Import a module on the cache directory for modules and extract a class from it.
 
@@ -22,11 +22,21 @@ def patch_get_class_in_module(
         `typing.Type`: The class looked for.
     """
     name = os.path.normpath(module_path).replace(
-        ".py", "").replace(
-        os.path.sep, ".")
-    module_path = str(Path(HF_MODULES_CACHE) / module_path)
-    module = importlib.machinery.SourceFileLoader(
-        name, module_path).load_module()
+            ".py", "").replace(
+            os.path.sep, ".")
+    if amp_patch:
+        components=name.split(".")
+        components.pop(-2)
+        components.pop(-3)
+        name = ".".join(components)
+        components[-1]+=".py"
+        module_path = str(Path(AMP_DIR) / "models" / "/".join(components))
+        module = importlib.machinery.SourceFileLoader(
+            name, module_path).load_module()
+    else:
+        module_path = str(Path(HF_MODULES_CACHE) / module_path)
+        module = importlib.machinery.SourceFileLoader(
+            name, module_path).load_module()
     func(module, name)
     return getattr(module, class_name)
 
@@ -39,7 +49,8 @@ def patch_create_dynamic_module(name: Union[str, os.PathLike]):
             The name of the dynamic module to create.
     """
     init_hf_modules()
-    dynamic_module_path = Path(osp.join(AMP_DIR, "models", name)).resolve()
+    model_name = name.split("/")[2]
+    dynamic_module_path = (Path(AMP_DIR) / "models" / "transformers_modules" / model_name).resolve()
     logger.info(f"dynamic_module_path: {dynamic_module_path}")
 
     # If the parent module does not exist yet, recursively create it.
@@ -48,7 +59,7 @@ def patch_create_dynamic_module(name: Union[str, os.PathLike]):
     os.makedirs(dynamic_module_path, exist_ok=True)
     init_path = dynamic_module_path / "__init__.py"
     if not init_path.exists():
-        init_path.touch()
+        # init_path.touch()
         # It is extremely important to invalidate the cache when we change stuff in those modules, or users end up
         # with errors about module that do not exist. Same for all other `invalidate_caches` in this file.
         importlib.invalidate_caches()
