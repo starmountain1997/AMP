@@ -200,6 +200,6 @@ def llama_attention_forward(
 @when_imported("transformers")
 def patch_llama(mod):
     logger.info("patched llama")
-    mod.models.llama.modeling_llama.forward = llama_rms_norm_forward
+    mod.models.llama.modeling_llama.LlamaRMSNorm.forward = llama_rms_norm_forward
     mod.models.llama.modeling_llama.apply_rotary_pos_emb = npu_apply_rotary_pos_emb
     mod.models.llama.modeling_llama.LlamaAttention.forward = llama_attention_forward
