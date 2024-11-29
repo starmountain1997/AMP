@@ -24,11 +24,11 @@ import time
 
 from tqdm import tqdm
 from transformers import pipeline
-from amp.models.llama import patch_llama
+
 
 def main(use_amp=False):
     if use_amp:
-        pass
+        from amp.models.llama import patch_llama
 
     model_id = "meta-llama/Llama-3.2-1B"
     warmup_times = 10
