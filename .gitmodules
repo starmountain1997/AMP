@@ -16,3 +16,6 @@
 [submodule "supported_models/CodeQwen1.5-7B"]
 	path = supported_models/CodeQwen1.5-7B
 	url = https://modelers.cn/openMind-ecosystem/CodeQwen1.5-7B.git
+[submodule "supported_models/Bunny-Llama-3-8B-V"]
+	path = supported_models/Bunny-Llama-3-8B-V
+	url = https://modelers.cn/openMind-ecosystem/Bunny-Llama-3-8B-V.git

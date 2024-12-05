@@ -59,6 +59,7 @@ def when_imported(fullname):
     """
     Register a hook to be executed after the specified module is imported.
     """
+
     def decorator(func):
         if fullname in sys.modules:
             func(sys.modules[fullname])
@@ -66,6 +67,7 @@ def when_imported(fullname):
             _post_import_hooks[fullname].append(func)
             _target_modules.add(fullname)  # Add to the whitelist
         return func
+
     return decorator
 
 

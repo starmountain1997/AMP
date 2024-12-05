@@ -1,19 +1,10 @@
-import math
-
 import torch
-from transformers.generation.logits_process import (
-    LOGITS_PROCESSOR_INPUTS_DOCSTRING, MinLengthLogitsProcessor,
-    MinNewTokensLengthLogitsProcessor, SuppressTokensAtBeginLogitsProcessor,
-    SuppressTokensLogitsProcessor)
-from transformers.generation.stopping_criteria import (
-    STOPPING_CRITERIA_INPUTS_DOCSTRING, EosTokenCriteria)
-from transformers.utils.doc import add_start_docstrings
-
-from amp.module_patcher import when_imported
 
 # 算子缺失
 # https://gitee.com/ascend/pytorch/issues/I9JGYU?from=project-issue
 # 930 之后的 torch_npu 版本是支持的
+
+SUPPORT_ISIN_TORCH_NPU = ("2.5.1rc1", "2.4.0", "2.3.1.post2", "2.1.0.post8")
 
 
 def npu_isin(
@@ -21,7 +12,7 @@ def npu_isin(
     test_elements: torch.Tensor,
     *,
     assume_unique: bool = False,
-    invert: bool = False
+    invert: bool = False,
 ) -> torch.Tensor:
     """
     Mimics torch.isin for tensors of arbitrary dimensions.
@@ -42,11 +33,9 @@ def npu_isin(
     elements_flat = elements.flatten()
     test_elements_flat = test_elements.flatten()
 
-    result_flat = (elements_flat.unsqueeze(-1) ==
-                   test_elements_flat).any(dim=-1)
+    result_flat = (elements_flat.unsqueeze(-1) == test_elements_flat).any(dim=-1)
 
     if invert:
         result_flat = ~result_flat
 
     return result_flat.view(elements.shape)
-
