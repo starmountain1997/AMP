@@ -6,9 +6,8 @@ from pathlib import Path
 from types import ModuleType
 from typing import Callable, List, Optional, Type, Union
 
-from loguru import logger
-
 import transformers
+from loguru import logger
 from transformers.dynamic_module_utils import get_imports, get_relative_imports
 from transformers.utils import HF_MODULES_CACHE
 

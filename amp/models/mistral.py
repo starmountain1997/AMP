@@ -6,7 +6,6 @@ import torch.nn.functional as F
 import torch_npu
 from loguru import logger
 from torch import nn
-
 from transformers.cache_utils import Cache
 from transformers.models.mistral.modeling_mistral import repeat_kv
 
