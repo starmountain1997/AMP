@@ -5,11 +5,12 @@ import torch
 import torch.nn.functional as F
 import torch_npu
 from torch import nn
+
 from transformers.cache_utils import Cache
 from transformers.models.llama.modeling_llama import repeat_kv
 from transformers.utils import logging
 
-from amp.module_patcher import when_imported
+from ..module_patcher import when_imported
 
 logger = logging.get_logger(__name__)
 
@@ -196,5 +197,5 @@ def patch_llama(mod):
     logger.info("patched llama")
     mod.models.llama.modeling_llama.LlamaRMSNorm.forward = llama_rms_norm_forward
     mod.models.llama.modeling_llama.apply_rotary_pos_emb = npu_apply_rotary_pos_emb
-    #using attention operators can cause performance go down
-    #mod.models.llama.modeling_llama.LlamaAttention.forward = llama_attention_forward
+    # using attention operators can cause performance go down
+    # mod.models.llama.modeling_llama.LlamaAttention.forward = llama_attention_forward

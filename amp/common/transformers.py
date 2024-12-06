@@ -6,8 +6,9 @@ from pathlib import Path
 from types import ModuleType
 from typing import Callable, List, Optional, Type, Union
 
-import transformers
 from loguru import logger
+
+import transformers
 from transformers.dynamic_module_utils import get_imports, get_relative_imports
 from transformers.utils import HF_MODULES_CACHE
 
@@ -30,7 +31,8 @@ def patch_get_class_in_module(
         `typing.Type`: The class looked for.
     """
     logger.info(f"transformers.__version__: {transformers.__version__}")
-    if transformers.__version__ < "4.45.0":
+    # if transformers.__version__ < "4.45.0":
+    if True:
         # 无法确定 openmind.hf.npu_fused_ops.modeling_utils.om_get_class_in_module 是否给低版本做了适配
         # 因此不建议和openmind一起使用
         name = (

@@ -6,8 +6,8 @@ import torch_npu
 import torch_npu.npu
 from loguru import logger
 
-from amp.common.transformers import patch_get_class_in_module
-from amp.module_patcher import when_imported
+from ..common.transformers import patch_get_class_in_module
+from ..module_patcher import when_imported
 
 
 @torch.jit.script
@@ -173,4 +173,10 @@ def _patch_chatglm(mod, name):
 
 @when_imported("transformers")
 def patch_chatglm(mod):
-    mod.dynamic_module_utils.get_class_in_module = partial(patch_get_class_in_module, func=_patch_chatglm)
+    if not "4.39.0"<=mod.__version__ >= "4.40.2":
+        raise ImportError(
+                f"The version of transformers is {mod.__version__}, which is not supported. Please install version 4.39.0<=transformers<=4.40.2."
+        )
+    mod.dynamic_module_utils.get_class_in_module = partial(
+        patch_get_class_in_module, func=_patch_chatglm
+    )

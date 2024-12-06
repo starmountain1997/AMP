@@ -7,9 +7,14 @@ import torch_npu.npu
 from loguru import logger
 from torch import Tensor
 
-from amp.common.transformers import patch_get_class_in_module
-from amp.module_patcher import when_imported
-from amp.models.llama import llama_rms_norm_forward
+from ..common.transformers import patch_get_class_in_module
+from ..module_patcher import when_imported
+
+
+def llama_rms_norm_forward(self, hidden_states):
+    return torch_npu.npu_rms_norm(
+        hidden_states, self.weight, epsilon=self.variance_epsilon
+    )[0]
 
 
 def multi_header_attention_qkv_attention(
@@ -59,6 +64,8 @@ def _patch_mergrezo(mod, name):
 
 
 @when_imported("transformers")
-def patchmergrezo(mod):
-    mod.dynamic_module_utils.get_class_in_module = partial(patch_get_class_in_module, func=_patch_mergrezo)
+def patch_mergrezo(mod):
     mod.models.llama.modeling_llama.LlamaRMSNorm.forward = llama_rms_norm_forward
+    mod.dynamic_module_utils.get_class_in_module = partial(
+        patch_get_class_in_module, func=_patch_mergrezo
+    )

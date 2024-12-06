@@ -19,3 +19,6 @@
 [submodule "supported_models/Bunny-Llama-3-8B-V"]
 	path = supported_models/Bunny-Llama-3-8B-V
 	url = https://modelers.cn/openMind-ecosystem/Bunny-Llama-3-8B-V.git
+[submodule "supported_models/codegeex2-6b"]
+	path = supported_models/codegeex2-6b
+	url = https://modelers.cn/zhipuai/codegeex2-6b.git

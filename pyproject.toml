@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "AMP"
-version = "0.0.2"
+version = "0.0.3"
 description = "ascend model patcher"
 readme = "README.md"
 authors = [{ name = "guozr", email = "guozr1997@hotmail.com" }]
@@ -17,4 +17,4 @@ dependencies = ["torch_npu", "torch", "transformers", "numpy<2", "loguru"]
 deepspeed = ["deepspeed"]
 
 [tool.setuptools]
-packages = ["amp"]
+packages = ["amp","amp.common","amp.models"]
