@@ -22,3 +22,6 @@
 [submodule "supported_models/codegeex2-6b"]
 	path = supported_models/codegeex2-6b
 	url = https://modelers.cn/zhipuai/codegeex2-6b.git
+[submodule "supported_models/characterglm-6b"]
+	path = supported_models/characterglm-6b
+	url = https://modelers.cn/zhipuai/characterglm-6b.git

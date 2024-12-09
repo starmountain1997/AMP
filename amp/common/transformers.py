@@ -29,9 +29,7 @@ def patch_get_class_in_module(
     Returns:
         `typing.Type`: The class looked for.
     """
-    logger.info(f"transformers.__version__: {transformers.__version__}")
-    # if transformers.__version__ < "4.45.0":
-    if True:
+    if transformers.__version__ < "4.45.0":
         # 无法确定 openmind.hf.npu_fused_ops.modeling_utils.om_get_class_in_module 是否给低版本做了适配
         # 因此不建议和openmind一起使用
         name = (
@@ -82,6 +80,7 @@ def patch_get_class_in_module(
     return getattr(module, class_name)
 
 
+@DeprecationWarning
 def patch_check_imports(filename: Union[str, os.PathLike]) -> List[str]:
     """
     Check if the current Python environment contains all the libraries that are imported in a file. Will raise if a

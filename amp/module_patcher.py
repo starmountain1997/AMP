@@ -2,6 +2,7 @@ import importlib
 import os.path as osp
 import sys
 from collections import defaultdict
+from loguru import logger
 
 # https://peps.python.org/pep-0369/
 
@@ -12,7 +13,7 @@ _target_modules = {
     "transformers.models.llama.modeling_llama",
     "transformers.models.qwen2.modeling_qwen2",
     "transformers.models.mistral.modeling_mistral",
-    "transformers.generation.logits_process",
+    # "transformers.generation.logits_process",
     "transformers.dynamic_module_utils",
     "deepspeed.ops.op_builder",
 }  # Whitelist of modules to monitor for post-import hooks

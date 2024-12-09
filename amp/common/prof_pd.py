@@ -33,9 +33,3 @@ def operator_rank(csv_path: str):
     logger.info(
         f"Total Duration: {total_duration}  Device Total Duration(us): {total_device_duration}  Host Total Duration(us): {total_host_duration}\n{table}"
     )
-
-
-if __name__ == "__main__":
-    operator_rank(
-        "/home/guozr/CODE/AMP/supported_models/codegeex4-all-9b/prof/bms-openmind_3122330_20241206084328185_ascend_pt/ASCEND_PROFILER_OUTPUT/operator_details.csv"
-    )
