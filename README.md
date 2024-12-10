@@ -1,5 +1,7 @@
 # AscendModelPatcher
 
+Patch transformers at will. Anytime! Anywhere!
+
 ## installation
 
 ### install with deepspeed
@@ -18,6 +20,8 @@ pip install .\[deepspeed\]
 
 
 ## usage
+
+### 在推理脚本中
 
 ```python
 import time
@@ -54,6 +58,16 @@ def main(use_amp=False):
 
 if __name__ == "__main__":
     main(use_amp=False)
+```
+
+### LLaMA-Factory
+
+#### train
+
+在 `src/llamafactory/train/tuner.py` 中增加:
+
+```
+from amp.models.llama import patch_llama
 ```
 
 ## 增加模型
