@@ -25,3 +25,6 @@
 [submodule "supported_models/characterglm-6b"]
 	path = supported_models/characterglm-6b
 	url = https://modelers.cn/zhipuai/characterglm-6b.git
+[submodule "supported_models/chatglm2-6b-32k"]
+	path = supported_models/chatglm2-6b-32k
+	url = https://modelers.cn/zhipuai/chatglm2-6b-32k.git
