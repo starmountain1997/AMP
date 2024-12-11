@@ -10,11 +10,20 @@ readme = "README.md"
 authors = [{ name = "guozr", email = "guozr1997@hotmail.com" }]
 urls = { "Homepage" = "https://github.com/starmountain1997/AMP" }
 requires-python = ">=3.8"
-dependencies = ["torch_npu", "torch", "transformers", "numpy<2", "loguru"]
+dependencies = ["torch", "transformers", "numpy<2", "loguru", "astor"]
 
 
 [project.optional-dependencies]
 deepspeed = ["deepspeed"]
+npu = [
+    "torch_npu",
+    "prettytable",
+    "pandas",
+    "openi",
+    "openmind",
+    "openmind_hub",
+    "huggingface_hub",
+]
 
 [tool.setuptools]
-packages = ["amp","amp.common","amp.models"]
+packages = ["amp", "amp.common", "amp.models"]

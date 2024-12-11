@@ -2,7 +2,7 @@ from functools import partial
 
 from loguru import logger
 
-from ..common.transformers import patch_get_class_in_module
+from ..common.patch_transformers import patch_get_class_in_module
 from ..module_patcher import when_imported
 
 

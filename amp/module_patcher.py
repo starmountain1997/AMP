@@ -2,7 +2,6 @@ import importlib
 import os.path as osp
 import sys
 from collections import defaultdict
-from loguru import logger
 
 # https://peps.python.org/pep-0369/
 
