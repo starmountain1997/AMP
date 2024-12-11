@@ -31,4 +31,5 @@ tests/
 *.out
 *.xlsx
 
-amp/supported_models/*/*.safetensors
+
+**/kernel_metaa

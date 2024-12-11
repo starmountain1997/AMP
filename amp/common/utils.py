@@ -31,3 +31,6 @@ def reupload2modelers(model_name: str, owner: str):
         folder_path=local_folder,
         repo_id=new_model_name,
     )
+
+if __name__ == "__main__":
+    reupload2modelers("THUDM/chatglm2-6b-32k", "zhipuai")
