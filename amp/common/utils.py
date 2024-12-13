@@ -11,7 +11,6 @@ import openi
 import torch_npu
 from huggingface_hub import snapshot_download as hf_snapshot_download
 from loguru import logger
-from tqdm import tqdm
 
 
 def modelers2openi(model_id, openi_repo_id: str, if_hf: bool = True):
@@ -46,21 +45,17 @@ def inference_test(test_times: int, warm_up_times: int):
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            logger.debug("Running warm-up iterations...")
-            for _ in tqdm(range(warm_up_times), desc="Warm-up"):
+            for i in range(warm_up_times):
+                logger.debug(f"running warmup iter {i}/{warm_up_times}")
                 func(*args, **kwargs)
 
-            # Testing phase with tqdm progress bar
-            logger.debug("Running test iterations...")
-            runtimes = []
-            for _ in tqdm(range(test_times), desc="Testing"):
-                start = time.time()
+            start = time.time()
+            for i in range(test_times):
+                logger.debug(f"running test iter {i}/{test_times}")
                 func(*args, **kwargs)
-                end = time.time()
-                runtimes.append(end - start)
+            end = time.time()
 
-            # Calculate average runtime
-            avg_time = sum(runtimes) / test_times
+            avg_time = (end - start) / test_times
             logger.info(
                 f"Average runtime over {test_times} iterations: {avg_time:.6f} seconds"
             )

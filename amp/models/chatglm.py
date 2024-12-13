@@ -161,8 +161,8 @@ def patch_core_attention_forward(
     return context_layer
 
 
-def _patch_chatglm(mod, name):
-    package_name = name.split(".")[-1]
+def _patch_chatglm(mod):
+    package_name = mod.__name__.split(".")[-1]
     if package_name == "modeling_chatglm":
         logger.info(f"{mod} is patched.")
         mod.RMSNorm.forward = patch_rms_norm_forward

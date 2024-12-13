@@ -56,8 +56,10 @@ def multi_header_attention_qkv_attention(
     return (w @ v).permute(0, 2, 1, 3).flatten(start_dim=2), qk.detach()
 
 
-def _patch_mergrezo(mod, name):
-    package_name = name.split(".")[-1]
+def _patch_mergrezo(
+    mod,
+):
+    package_name = mod.__name__.split(".")[-1]
     if package_name == "audio":
         logger.info(f"{mod} is patched.")
         mod.MultiHeadAttention.qkv_attention = multi_header_attention_qkv_attention

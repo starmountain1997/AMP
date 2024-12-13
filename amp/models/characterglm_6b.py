@@ -14,18 +14,26 @@ def rms_norm_forward(self, hidden_states: torch.Tensor):
     return output.to(input_dtype)
 
 
-def _patch_characterglm_6b(mod, name):
+def _patch_characterglm_6b(mod):
     # https://modelers.cn/models/zhipuai/characterglm-6b/tree/main
-    logger.debug(mod)
-    logger.debug(name)
-    package_name = name.split(".")[-1]
-    if package_name == "modeling_characterglm":
-        parts = name.split(".")
+    if mod.__name__.split(".")[-1] == "modeling_characterglm":
+        # 因为是从modeling_characterglm导入的modeling_chatglm
+        parts = mod.__name__.split(".")
         parts[-1] = "modeling_chatglm"
         new_name = ".".join(parts)
         new_mod = sys.modules.get(new_name)
         logger.info(f"{new_mod} is patched.")
         new_mod.RMSNorm.forward = rms_norm_forward
+        new_mod.MLP.activation_func = lambda x: torch_npu.npu_swiglu(x, dim=-1)
+
+        # 命名空间注入
+        # ori_globals = attention_forward.__globals__
+        # ori_globals["split_tensor_along_last_dim"]=new_mod.split_tensor_along_last_dim
+        # ori_globals["apply_rotary_pos_emb"]=new_mod.apply_rotary_pos_emb
+        # attention_forward_code=inspect.getsource(attention_forward)
+        # exec(attention_forward_code, ori_globals)
+        # injected_attention_forward=ori_globals["attention_forward"]
+        # new_mod.CoreAttention.forward =patch_core_attention_forward
 
 
 @when_imported("transformers")

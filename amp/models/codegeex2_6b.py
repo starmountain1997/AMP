@@ -6,7 +6,7 @@ import torch_npu
 import torch_npu.npu
 from loguru import logger
 
-from ..common.transformers import patch_get_class_in_module
+from ..common.patch_transformers import patch_get_class_in_module
 from ..module_patcher import when_imported
 
 
@@ -161,8 +161,8 @@ def patch_core_attention_forward(
     return context_layer
 
 
-def _patch_chatglm(mod, name):
-    package_name = name.split(".")[-1]
+def _patch_chatglm(mod):
+    package_name = mod.__name__.split(".")[-1]
     if package_name == "modeling_chatglm":
         logger.info(f"{mod} is patched.")
         mod.RMSNorm.forward = patch_rms_norm_forward

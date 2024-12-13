@@ -37,7 +37,6 @@ def patch_get_class_in_module(func: Callable) -> Callable:
                     func=ast.Name(id="func", ctx=ast.Load()),
                     args=[
                         ast.Name(id="module", ctx=ast.Load()),
-                        ast.Name(id="class_name", ctx=ast.Load()),
                     ],
                     keywords=[],
                 )
