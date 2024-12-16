@@ -68,7 +68,7 @@ def inference_test(test_times: int, warm_up_times: int):
 
 def find_latest_prof_folder(base_path):
     folder_pattern = re.compile(
-        rf"^{platform.node()}_([0-9]{{5}})_([0-9]{{17}})_ascend_pt$"
+        rf"^{platform.node()}_([0-9]+)_([0-9]{{17}})_ascend_pt$"
     )
 
     latest_folder = None

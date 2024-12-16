@@ -182,12 +182,12 @@ def patch_core_attention_forward(
     return context_layer
 
 
-def _patch_chatglm2_32k(mod, name):
+def _patch_chatglm2_32k(mod):
     package_name = mod.__name__.split(".")[-1]
     if package_name == "modeling_chatglm":
         logger.info(f"{mod} is patched.")
         mod.RMSNorm.forward = patch_rms_norm_forward
-        # mod.CoreAttention.forward = patch_core_attention_forward
+        mod.CoreAttention.forward = patch_core_attention_forward
         mod.apply_rotary_pos_emb = patch_apply_rotary_pos_emb
         mod.MLP.activation_func = lambda x: torch_npu.npu_swiglu(x, dim=-1)
 
@@ -196,7 +196,7 @@ def _patch_chatglm2_32k(mod, name):
 def patch_chatglm2_32k(mod):
     if mod.__version__ != "4.30.2":
         logger.warning(
-            f"when running characterglm_6b, please install transformers==4.30.2, but got: {mod.__version__}"
+            f"when running chatglm2_32k, please install transformers==4.30.2, but got: {mod.__version__}"
         )
 
     get_class_in_module_patched = patch_get_class_in_module(func=_patch_chatglm2_32k)
