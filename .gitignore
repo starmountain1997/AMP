@@ -34,3 +34,4 @@ tests/
 
 **/kernel_meta
 examples/
+docker/

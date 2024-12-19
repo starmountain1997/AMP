@@ -13,14 +13,15 @@ from huggingface_hub import snapshot_download as hf_snapshot_download
 from loguru import logger
 
 
-def modelers2openi(model_id, openi_repo_id: str, if_hf: bool = True):
-    _, model_name = model_id.split("/")
-    if if_hf:
-        from huggingface_hub import snapshot_download
-    else:
-        from openmind_hub import snapshot_download
-
-    path = snapshot_download(model_id)
+def modelers2openi(model_id, openi_repo_id: str, path: str = None, if_hf: bool = True):
+    # _, model_name = model_id.split("/")
+    model_name = "AMP_model_q4p5"
+    if path is None:
+        if if_hf:
+            from huggingface_hub import snapshot_download
+        else:
+            from openmind_hub import snapshot_download
+        path = snapshot_download(model_id)
     openi.upload_model(openi_repo_id, model_name, path)
 
 
@@ -46,12 +47,12 @@ def inference_test(test_times: int, warm_up_times: int):
         @wraps(func)
         def wrapper(*args, **kwargs):
             for i in range(warm_up_times):
-                logger.debug(f"running warmup iter {i}/{warm_up_times}")
+                logger.debug(f"running warmup iter {i+1}/{warm_up_times}")
                 func(*args, **kwargs)
 
             start = time.time()
             for i in range(test_times):
-                logger.debug(f"running test iter {i}/{test_times}")
+                logger.debug(f"running test iter {i+1}/{test_times}")
                 func(*args, **kwargs)
             end = time.time()
 
@@ -91,7 +92,7 @@ def find_latest_prof_folder(base_path):
 
     if latest_folder:
         return latest_folder
-    raise ValueError("No valid folder found under the base path.")
+    raise ValueError(f"No valid folder found under the base path: {base_path}.")
 
 
 def inference_prof(
@@ -159,3 +160,18 @@ def run_compare(task_1: str, task_2: str, save_path: str):
     ]
     logger.info(" ".join(command))
     subprocess.run(command, cwd=save_path)
+
+
+if __name__ == "__main__":
+    from modelscope import snapshot_download
+    from modelscope.hub.api import HubApi
+
+    api = HubApi()
+    api.login("4d04a47d-b3d8-4f1d-95a2-791aec924262")
+
+    path = snapshot_download(
+        "ZhipuAI/cogagent2-9b", cache_dir="/mnt/data00/guozr/modelscope"
+    )
+    modelers2openi(
+        "THUDM/cogagent2-9b", openi_repo_id="starmountain1997/AMP", path=path
+    )

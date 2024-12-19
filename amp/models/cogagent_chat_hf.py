@@ -1,4 +1,6 @@
 import importlib
+import sys
+import types
 
 import torch
 import torch.nn.functional as F
@@ -6,8 +8,6 @@ from loguru import logger
 
 from ..common.patch_transformers import patch_get_class_in_module
 from ..module_patcher import when_imported
-import types
-import sys
 
 
 def attention_forward_visual(self, x: "tensor(B, L, D)") -> "tensor(B, L, D)":
