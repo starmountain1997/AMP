@@ -70,18 +70,4 @@ if __name__ == "__main__":
 from amp.models.llama import patch_llama
 ```
 
-## 增加模型
-
-在 `supported_models` 目录下执行：
-
-```bash
-GIT_LFS_SKIP_SMUDGE=1 git submodule add https://modelers.cn/openMind-ecosystem/Yi-6B.git
-```
-
-## 更新模型
-
-```bash
-GIT_LFS_SKIP_SMUDGE=1 git submodule update --init --recursive
-```
-
 ## TODO
