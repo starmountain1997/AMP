@@ -1,13 +1,15 @@
 import os
 import threading
 import time
-from typing import Dict, List
+from functools import partial
+from typing import Callable, Dict, List
 
 import torch
 from loguru import logger
-from openmind import (AutoModelForCausalLM, AutoTokenizer,
+from openmind import (AutoModelForCausalLM, AutoProcessor, AutoTokenizer,
                       is_torch_npu_available)
-from transformers import TextIteratorStreamer
+from PIL import Image
+from transformers import LlamaTokenizer, TextIteratorStreamer
 
 
 class Inferencer:
@@ -53,19 +55,20 @@ class Inferencer:
     def measure_performance(
         self,
         model_name: str,
-        prompt: str|List[Dict] = None,
+        prompt: str | List[Dict] = None,
         tokenizer=None,
         if_chat: bool = False,
     ):
         if prompt is None:
-            prompt=self.MESSAGE if if_chat else self.PROMPT
+            prompt = self.MESSAGE if if_chat else self.PROMPT
         if if_chat:
-            prompt = ''.join(f"{msg['role'].capitalize()}: {msg['content']}\n" for msg in prompt)
+            prompt = "".join(
+                f"{msg['role'].capitalize()}: {msg['content']}\n" for msg in prompt
+            )
 
         if tokenizer is None:
             tokenizer = AutoTokenizer.from_pretrained(model_name)
         model = AutoModelForCausalLM.from_pretrained(model_name).to(self._device).eval()
-
 
         input_ids = tokenizer.encode(prompt, return_tensors="pt").to(self._device)
 
@@ -76,7 +79,9 @@ class Inferencer:
                     input_ids, max_length=input_ids.shape[1] + 5, do_sample=False
                 )
 
-        streamer = TextIteratorStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
+        streamer = TextIteratorStreamer(
+            tokenizer, skip_prompt=True, skip_special_tokens=True
+        )
 
         generated_tokens = []
         ttft_recorded = False
@@ -121,63 +126,49 @@ class Inferencer:
 
         return ttft, tps, generated_text
 
-    @classmethod
     def measure_performance_multimodal(
-        cls,
+        self,
         model_name: str,  # Replace with your multimodal model
+        processor: Callable = None,
         messages: List[Dict] = None,
-        processor=None,
         tokenizer=None,
-        device=None,
-        total_tokens=50,
-        warmup_runs=1,
-        max_new_tokens=50,
     ):
-        """
-        Measure Time To First Token (TTFT) and Tokens Per Second (TPS) using streaming generation for multimodal models.
-
-        :param image_path_or_url: Path or URL to the image file.
-        :param audio_path_or_url: Path or URL to the audio file.
-        :param prompt: Textual prompt to guide generation.
-        :param model_name: Name of the Hugging Face multimodal model.
-        :param processor_image: Preprocessor for image input.
-        :param processor_audio: Preprocessor for audio input.
-        :param tokenizer: Tokenizer for text input.
-        :param device: 'cpu' or 'cuda'.
-        :param total_tokens: Number of tokens to generate.
-        :param warmup_runs: Number of warm-up inferences before measurement.
-        :return: TTFT (seconds), TPS (tokens per second), generated text.
-        """
-        # Load tokenizer and model
-        if device is None:
-            device = "npu" if is_torch_npu_available() else "cuda"
-
-        from openmind_hub import snapshot_download
-
-        model_name = snapshot_download(model_name)
-
         if tokenizer is None:
             tokenizer = AutoTokenizer.from_pretrained(
                 model_name, trust_remote_code=True
             )
-        model = AutoModelForCausalLM.from_pretrained(model_name, trust_remote_code=True)
-        model.to(device).eval()
-
-        if processor is None:
-            processor = model._get_or_init_processor()
+        if isinstance(model_name, str):
+            model = (
+                AutoModelForCausalLM.from_pretrained(
+                    model_name,
+                    trust_remote_code=True,
+                )
+                .to(self._device)
+                .eval()
+            )
+        else:
+            model=model_name
 
         if messages is None:
-            messages = cls.MULTIMODAL_MESSAGE
+            messages = self.MULTIMODAL_MESSAGE
 
-        inputs = processor(messages)
+        if processor is None:
+            processor = AutoProcessor.from_pretrained(
+                model_name,
+                trust_remote_code=True,
+            )
+            inputs = processor(messages)
+        else:
+            inputs = processor(messages, model, tokenizer)
 
         # Warm-up phase
-        if warmup_runs > 0:
-            for _ in range(warmup_runs):
-                with torch.no_grad():
-                    model.generate(
-                        **inputs, max_new_tokens=max_new_tokens, do_sample=False
-                    )
+        for _ in range(self._warmup_runs):
+            with torch.no_grad():
+                model.generate(
+                    **inputs,
+                    max_length=inputs["input_ids"].shape[1] + 5,
+                    do_sample=False,
+                )
 
         # Initialize the streamer
         streamer = TextIteratorStreamer(
@@ -194,7 +185,7 @@ class Inferencer:
             with torch.no_grad():
                 model.generate(
                     **inputs,
-                    max_new_tokens=max_new_tokens,
+                    max_length=inputs["input_ids"].shape[1] + self._total_tokens,
                     do_sample=False,
                     streamer=streamer,
                 )
@@ -217,7 +208,7 @@ class Inferencer:
                 generation_started = True
 
             # Stop after receiving the desired number of tokens
-            if len(generated_tokens) >= total_tokens:
+            if len(generated_tokens) >= self._total_tokens:
                 break
 
         # End timer
@@ -238,14 +229,65 @@ class Inferencer:
         return ttft, tps, generated_text
 
 
+def fa(messages, model, tokenizer):
+    last_user_input = [msg for msg in messages if msg["role"] == "user"][-1]
+    image = last_user_input["content"]["image"]
+    image = Image.open(image).convert("RGB")
+    query = last_user_input["content"]["text"]
+    input_by_model = model.build_conversation_input_ids(
+        tokenizer, query=query, history=[], images=[image]
+    )
+
+    inputs = {
+        "input_ids": input_by_model["input_ids"].unsqueeze(0).to("npu"),
+        "token_type_ids": input_by_model["token_type_ids"].unsqueeze(0).to("npu"),
+        "attention_mask": input_by_model["attention_mask"].unsqueeze(0).to("npu"),
+        "images": [[input_by_model["images"][0].to("npu").to(torch.float16)]],
+    }
+    if 'cross_images' in input_by_model and input_by_model['cross_images']:
+        inputs['cross_images'] = [[input_by_model['cross_images'][0].to("npu").to(torch.float16)]]
+    return inputs
+
+
 if __name__ == "__main__":
     i = Inferencer()
-    model_name_or_path = "openMind-ecosystem/Yi-6B"
-    i.measure_performance(model_name_or_path)
-    model_name_or_path = "openMind-ecosystem/Yi-1.5-9b-chat"
-    i.measure_performance(model_name_or_path, if_chat=True)
+    # model_name_or_path = "openMind-ecosystem/Yi-6B"
+    # i.measure_performance(model_name_or_path)
+    # model_name_or_path = "openMind-ecosystem/Yi-1.5-9b-chat"
+    # i.measure_performance(model_name_or_path, if_chat=True)
     # model_name_or_path = "zyl9737/deepseek-coder-6.7b-instruct"
     # model_name_or_path = "zyl9737/deepseek-coder-6.7b-instruct_merge_lora"
     # Inferencer.measure_performance_chat(model_name_or_path)
-    # model_name_or_path = "openMind-ecosystem/cogagent-chat-hf"
-    # Inferencer.measure_performance_multimodal(model_name_or_path)
+
+    from openmind_hub import snapshot_download
+
+    model_name_or_path = snapshot_download(
+        "openMind-ecosystem/cogagent-chat-hf",
+        revision="npu",
+        resume_download=True,
+        ignore_patterns=["*.h5", "*.ot", "*.msgpack"],
+    )
+    tokenizer_name_or_path = snapshot_download(
+        "openMind-ecosystem/vicuna-7b-v1.5",
+        resume_download=True,
+        ignore_patterns=["*.h5", "*.ot", "*.msgpack"],
+    )
+    tokenizer = LlamaTokenizer.from_pretrained(tokenizer_name_or_path)
+    model = (
+        AutoModelForCausalLM.from_pretrained(
+            model_name_or_path,
+            torch_dtype=torch.float16,
+            low_cpu_mem_usage=True,
+            load_in_4bit=False,
+            trust_remote_code=True,
+        )
+        .to("npu:0")
+        .eval()
+    )
+
+
+    i.measure_performance_multimodal(
+        model_name=model,
+        processor=fa,
+        tokenizer=tokenizer
+    )

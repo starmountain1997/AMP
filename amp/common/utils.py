@@ -13,9 +13,8 @@ from huggingface_hub import snapshot_download as hf_snapshot_download
 from loguru import logger
 
 
-def modelers2openi(model_id, openi_repo_id: str, path: str = None, if_hf: bool = True):
-    # _, model_name = model_id.split("/")
-    model_name = "AMP_model_q4p5"
+def modelers2openi(model_id, openi_repo_id: str, path: str = None, if_hf: bool = False):
+    _, model_name = model_id.split("/")
     if path is None:
         if if_hf:
             from huggingface_hub import snapshot_download
