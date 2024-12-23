@@ -42,7 +42,7 @@ def reupload2modelers(model_name: str, owner: str):
     )
 
 
-def inference_test(test_times: int, warm_up_times: int):
+def inference_e2e(test_times: int, warm_up_times: int):
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -67,7 +67,7 @@ def inference_test(test_times: int, warm_up_times: int):
     return decorator
 
 
-def find_latest_prof_folder(base_path):
+def _find_latest_prof_folder(base_path):
     folder_pattern = re.compile(
         rf"^{platform.node()}_([0-9]+)_([0-9]{{17}})_ascend_pt$"
     )
@@ -80,7 +80,6 @@ def find_latest_prof_folder(base_path):
         if match:
             utc_time = match.group(2)
             try:
-                # Parse the UTC time
                 utc_dt = datetime.strptime(utc_time, "%Y%m%d%H%M%S%f")
 
                 if latest_time is None or utc_dt > latest_time:
@@ -95,9 +94,7 @@ def find_latest_prof_folder(base_path):
     raise ValueError(f"No valid folder found under the base path: {base_path}.")
 
 
-def inference_prof(
-    prof_save_path: str = "./",
-):
+def inference_prof(prof_save_path: str = "./"):
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -131,7 +128,10 @@ def inference_prof(
 
 
 def run_advisor(prof_save_path: str = "./"):
-    prof_folder = find_latest_prof_folder(prof_save_path)
+    """
+    运行advisor
+    """
+    prof_folder = _find_latest_prof_folder(prof_save_path)
     command = [
         "msprof-analyze",
         "advisor",
@@ -146,9 +146,10 @@ def run_advisor(prof_save_path: str = "./"):
 def run_compare(task_1: str, task_2: str, save_path: str):
     """
     https://gitee.com/ascend/mstt/tree/master/profiler/compare_tools
+    比较
     """
-    task_1_prof_folder = find_latest_prof_folder(task_1)
-    task_2_prof_folder = find_latest_prof_folder(task_2)
+    task_1_prof_folder = _find_latest_prof_folder(task_1)
+    task_2_prof_folder = _find_latest_prof_folder(task_2)
     command = [
         "msprof-analyze",
         "compare",
@@ -160,18 +161,3 @@ def run_compare(task_1: str, task_2: str, save_path: str):
     ]
     logger.info(" ".join(command))
     subprocess.run(command, cwd=save_path)
-
-
-if __name__ == "__main__":
-    from modelscope import snapshot_download
-    from modelscope.hub.api import HubApi
-
-    api = HubApi()
-    api.login("4d04a47d-b3d8-4f1d-95a2-791aec924262")
-
-    path = snapshot_download(
-        "ZhipuAI/cogagent2-9b", cache_dir="/mnt/data00/guozr/modelscope"
-    )
-    modelers2openi(
-        "THUDM/cogagent2-9b", openi_repo_id="starmountain1997/AMP", path=path
-    )

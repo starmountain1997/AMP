@@ -1,4 +1,6 @@
 import importlib
+import sys
+import types
 
 import torch
 import torch.nn.functional as F
@@ -6,8 +8,6 @@ from loguru import logger
 
 from ..common.patch_transformers import patch_get_class_in_module
 from ..module_patcher import when_imported
-import types
-import sys
 
 
 def attention_forward_visual(self, x: "tensor(B, L, D)") -> "tensor(B, L, D)":
@@ -183,7 +183,5 @@ def patch_cogvlm_chat_hf(mod):
             f"when running cogvlm_chat_hf, please install transformers==4.40.2, but got: {mod.__version__}"
         )
 
-    get_class_in_module_patched = patch_get_class_in_module(
-        func=_patch_cogvlm_chat_hf
-    )
+    get_class_in_module_patched = patch_get_class_in_module(func=_patch_cogvlm_chat_hf)
     mod.dynamic_module_utils.get_class_in_module = get_class_in_module_patched

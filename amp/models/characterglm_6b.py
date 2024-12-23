@@ -39,7 +39,7 @@ def _patch_characterglm_6b(mod):
 @when_imported("transformers")
 def patch_characterglm_6b(mod):
     if mod.__version__ != "4.41.2":
-        raise ImportError(
+        logger.warning(
             "when running characterglm_6b, please install transformers==4.41.2"
         )
     get_class_in_module_patched = patch_get_class_in_module(func=_patch_characterglm_6b)
