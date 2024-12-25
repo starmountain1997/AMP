@@ -1,7 +1,6 @@
 import os
 import threading
 import time
-from functools import partial
 from typing import Callable, Dict, List
 
 import torch
@@ -68,7 +67,7 @@ class Inferencer:
 
         if tokenizer is None:
             tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = AutoModelForCausalLM.from_pretrained(model_name).to(self._device).eval()
+        model = AutoModelForCausalLM.from_pretrained(model_name,device_map="auto",torch_dtype='auto',).eval()
 
         input_ids = tokenizer.encode(prompt, return_tensors="pt").to(self._device)
 
@@ -147,7 +146,7 @@ class Inferencer:
                 .eval()
             )
         else:
-            model=model_name
+            model = model_name
 
         if messages is None:
             messages = self.MULTIMODAL_MESSAGE
@@ -244,8 +243,10 @@ def fa(messages, model, tokenizer):
         "attention_mask": input_by_model["attention_mask"].unsqueeze(0).to("npu"),
         "images": [[input_by_model["images"][0].to("npu").to(torch.float16)]],
     }
-    if 'cross_images' in input_by_model and input_by_model['cross_images']:
-        inputs['cross_images'] = [[input_by_model['cross_images'][0].to("npu").to(torch.float16)]]
+    if "cross_images" in input_by_model and input_by_model["cross_images"]:
+        inputs["cross_images"] = [
+            [input_by_model["cross_images"][0].to("npu").to(torch.float16)]
+        ]
     return inputs
 
 
@@ -259,35 +260,33 @@ if __name__ == "__main__":
     # model_name_or_path = "zyl9737/deepseek-coder-6.7b-instruct_merge_lora"
     # Inferencer.measure_performance_chat(model_name_or_path)
 
-    from openmind_hub import snapshot_download
+    # from openmind_hub import snapshot_download
 
-    model_name_or_path = snapshot_download(
-        "openMind-ecosystem/cogagent-chat-hf",
-        revision="npu",
-        resume_download=True,
-        ignore_patterns=["*.h5", "*.ot", "*.msgpack"],
-    )
-    tokenizer_name_or_path = snapshot_download(
-        "openMind-ecosystem/vicuna-7b-v1.5",
-        resume_download=True,
-        ignore_patterns=["*.h5", "*.ot", "*.msgpack"],
-    )
-    tokenizer = LlamaTokenizer.from_pretrained(tokenizer_name_or_path)
-    model = (
-        AutoModelForCausalLM.from_pretrained(
-            model_name_or_path,
-            torch_dtype=torch.float16,
-            low_cpu_mem_usage=True,
-            load_in_4bit=False,
-            trust_remote_code=True,
-        )
-        .to("npu:0")
-        .eval()
-    )
+    # model_name_or_path = snapshot_download(
+    #     "openMind-ecosystem/cogagent-chat-hf",
+    #     revision="npu",
+    #     resume_download=True,
+    #     ignore_patterns=["*.h5", "*.ot", "*.msgpack"],
+    # )
+    # tokenizer_name_or_path = snapshot_download(
+    #     "openMind-ecosystem/vicuna-7b-v1.5",
+    #     resume_download=True,
+    #     ignore_patterns=["*.h5", "*.ot", "*.msgpack"],
+    # )
+    # tokenizer = LlamaTokenizer.from_pretrained(tokenizer_name_or_path)
+    # model = (
+    #     AutoModelForCausalLM.from_pretrained(
+    #         model_name_or_path,
+    #         torch_dtype=torch.float16,
+    #         low_cpu_mem_usage=True,
+    #         load_in_4bit=False,
+    #         trust_remote_code=True,
+    #     )
+    #     .to("npu:0")
+    #     .eval()
+    # )
 
-
-    i.measure_performance_multimodal(
-        model_name=model,
-        processor=fa,
-        tokenizer=tokenizer
+    model="ltdog/Qwen1.5-32B"
+    i.measure_performance(
+        model_name=model
     )

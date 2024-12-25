@@ -11,9 +11,11 @@ import openi
 import torch_npu
 from huggingface_hub import snapshot_download as hf_snapshot_download
 from loguru import logger
+import argparse
 
 
 def modelers2openi(model_id, openi_repo_id: str, path: str = None, if_hf: bool = False):
+    logger.info(f"Uploading model {model_id} to Openi repository {openi_repo_id}")
     _, model_name = model_id.split("/")
     if path is None:
         if if_hf:
@@ -39,32 +41,6 @@ def reupload2modelers(model_name: str, owner: str):
         folder_path=local_folder,
         repo_id=new_model_name,
     )
-
-
-def inference_e2e(test_times: int, warm_up_times: int):
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            for i in range(warm_up_times):
-                logger.debug(f"running warmup iter {i+1}/{warm_up_times}")
-                func(*args, **kwargs)
-
-            start = time.time()
-            for i in range(test_times):
-                logger.debug(f"running test iter {i+1}/{test_times}")
-                func(*args, **kwargs)
-            end = time.time()
-
-            avg_time = (end - start) / test_times
-            logger.info(
-                f"Average runtime over {test_times} iterations: {avg_time:.6f} seconds"
-            )
-            return avg_time  # Optionally return the average runtime
-
-        return wrapper
-
-    return decorator
-
 
 def _find_latest_prof_folder(base_path):
     folder_pattern = re.compile(
@@ -160,3 +136,44 @@ def run_compare(task_1: str, task_2: str, save_path: str):
     ]
     logger.info(" ".join(command))
     subprocess.run(command, cwd=save_path)
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+        description="Process one or more model names with a specified AMP."
+    )
+    parser.add_argument(
+        'models',
+        metavar='MODEL',
+        type=str,
+        nargs='+',
+        help='One or more model names to process.'
+    )
+    parser.add_argument(
+        '--amp',
+        type=str,
+        default='starmountain1997/AMP',
+        help='AMP name to use with the models (default: starmountain1997/AMP).'
+    )
+    return parser.parse_args()
+
+def main():
+    args = parse_arguments()
+    amp_name = args.amp
+    models = args.models
+
+    while True:
+        try:
+            for model in models:
+                modelers2openi(model, amp_name)
+            print("All models processed successfully.")
+            break  # Exit the loop if all models are processed without exceptions
+        except Exception as e:
+            print(f"An error occurred: {e}. Retrying...")
+            time.sleep(5)  # Wait for 5 seconds before retrying
+
+if __name__=="__main__":
+            # modelers2openi("zyl9737/deepseek-coder-6.7b-instruct","starmountain1997/AMP")
+            # modelers2openi("libo2024/Yi-9B-200K","starmountain1997/AMP")
+            # modelers2openi("ccpower/Bunny-Llama-3-8B-V","starmountain1997/AMP")
+            # modelers2openi("ltdog/Qwen1.5-32B","starmountain1997/AMP")
+            main()
