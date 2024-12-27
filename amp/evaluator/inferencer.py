@@ -8,8 +8,11 @@ from loguru import logger
 from openmind import (AutoModelForCausalLM, AutoProcessor, AutoTokenizer,
                       is_torch_npu_available)
 from PIL import Image
-from transformers import LlamaTokenizer, TextIteratorStreamer
-
+from transformers import TextIteratorStreamer
+import torch_npu
+from utils import run_advisor
+import os.path as osp
+# from amp.models.yi import patch_yi
 
 class Inferencer:
     PROMPT = "Can you give me some advice on how to keep healthy?"
@@ -31,7 +34,9 @@ class Inferencer:
     ]
 
     def __init__(
-        self, device: str = None, warmup_runs: int = 1, total_tokens: int = 100
+        self, device: str = None, warmup_runs: int = 1, total_tokens: int = 100,
+        need_profiling: bool = False,
+        profiling_save_path: str = "./",
     ):
         if device:
             self._device = device
@@ -41,6 +46,10 @@ class Inferencer:
             self._device = "cuda"
         else:
             self._device = "cpu"
+        if need_profiling and warmup_runs == 0:
+            logger.warning("warmup_runs must be a positive integer when need_profiling is True.")
+            warmup_runs = 1
+
         logger.info(f"Running inference on {self._device}...")
 
         if not isinstance(warmup_runs, int) or warmup_runs < 0:
@@ -50,6 +59,37 @@ class Inferencer:
         if not isinstance(total_tokens, int) or total_tokens < 0:
             raise ValueError("total_tokens must be a non-negative integer.")
         self._total_tokens = total_tokens
+
+        self._need_profiling = need_profiling
+        self._profiling_save_path = profiling_save_path
+
+    @staticmethod
+    def _get_profiler(device: str, prof_save_path: str):
+        logger.info(f"Profiling inference on {device}... save to {prof_save_path}")
+        if device == "npu":
+            experimental_config = torch_npu.profiler._ExperimentalConfig(
+                aic_metrics=torch_npu.profiler.AiCMetrics.PipeUtilization,
+                profiler_level=torch_npu.profiler.ProfilerLevel.Level1,
+                l2_cache=False,
+            )
+            prof = torch_npu.profiler.profile(
+                activities=[
+                    torch_npu.profiler.ProfilerActivity.CPU,
+                    torch_npu.profiler.ProfilerActivity.NPU,
+                ],
+                on_trace_ready=torch_npu.profiler.tensorboard_trace_handler(
+                    prof_save_path
+                ),
+                record_shapes=True,
+                profile_memory=True,
+                with_stack=True,
+                with_flops=False,
+                with_modules=False,
+                experimental_config=experimental_config,
+            )
+        else:
+            raise NotImplementedError("Profiler for CPU is not implemented yet.")
+        return prof
 
     def measure_performance(
         self,
@@ -67,16 +107,27 @@ class Inferencer:
 
         if tokenizer is None:
             tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = AutoModelForCausalLM.from_pretrained(model_name,device_map="auto",torch_dtype='auto',).eval()
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            device_map="auto",
+            torch_dtype="auto",
+        ).eval()
 
         input_ids = tokenizer.encode(prompt, return_tensors="pt").to(self._device)
 
         for i in range(self._warmup_runs):
             logger.debug(f"Running {i+1}/{self._warmup_runs} warm-up inference...")
+            prof_save_path=osp.join(self._profiling_save_path,f"profiling_{model_name.replace('/','_')}_{i}")
+            prof=self._get_profiler(device=self._device,prof_save_path=prof_save_path) if self._need_profiling else None
             with torch.no_grad():
+                if prof:
+                    logger.debug("Profiling warm-up inference...")
+                    prof.start()
                 model.generate(
                     input_ids, max_length=input_ids.shape[1] + 5, do_sample=False
                 )
+                if prof:
+                    prof.stop()
 
         streamer = TextIteratorStreamer(
             tokenizer, skip_prompt=True, skip_special_tokens=True
@@ -228,7 +279,7 @@ class Inferencer:
         return ttft, tps, generated_text
 
 
-def fa(messages, model, tokenizer):
+def cogagent2_9b_processor(messages, model, tokenizer):
     last_user_input = [msg for msg in messages if msg["role"] == "user"][-1]
     image = last_user_input["content"]["image"]
     image = Image.open(image).convert("RGB")
@@ -249,44 +300,16 @@ def fa(messages, model, tokenizer):
         ]
     return inputs
 
+def bunny_llama3_8b(messages,model,tokenizer):
+    # https://github.com/starmountain1997/AMP.git
+    pass
 
 if __name__ == "__main__":
-    i = Inferencer()
-    # model_name_or_path = "openMind-ecosystem/Yi-6B"
-    # i.measure_performance(model_name_or_path)
-    # model_name_or_path = "openMind-ecosystem/Yi-1.5-9b-chat"
-    # i.measure_performance(model_name_or_path, if_chat=True)
-    # model_name_or_path = "zyl9737/deepseek-coder-6.7b-instruct"
-    # model_name_or_path = "zyl9737/deepseek-coder-6.7b-instruct_merge_lora"
-    # Inferencer.measure_performance_chat(model_name_or_path)
+    i = Inferencer(need_profiling=True)
 
-    # from openmind_hub import snapshot_download
-
-    # model_name_or_path = snapshot_download(
-    #     "openMind-ecosystem/cogagent-chat-hf",
-    #     revision="npu",
-    #     resume_download=True,
-    #     ignore_patterns=["*.h5", "*.ot", "*.msgpack"],
-    # )
-    # tokenizer_name_or_path = snapshot_download(
-    #     "openMind-ecosystem/vicuna-7b-v1.5",
-    #     resume_download=True,
-    #     ignore_patterns=["*.h5", "*.ot", "*.msgpack"],
-    # )
-    # tokenizer = LlamaTokenizer.from_pretrained(tokenizer_name_or_path)
-    # model = (
-    #     AutoModelForCausalLM.from_pretrained(
-    #         model_name_or_path,
-    #         torch_dtype=torch.float16,
-    #         low_cpu_mem_usage=True,
-    #         load_in_4bit=False,
-    #         trust_remote_code=True,
-    #     )
-    #     .to("npu:0")
-    #     .eval()
-    # )
-
-    model="ltdog/Qwen1.5-32B"
-    i.measure_performance(
-        model_name=model
-    )
+    # model = "ccpower/Bunny-Llama-3-8B-V"
+    # model="zyl9737/deepseek-coder-6.7b-instruct"
+    # model="libo2024/Yi-9B-200K"
+    # model="ltdog/Qwen1.5-32B"
+    # i.measure_performance(model_name=model)
+    run_advisor(prof_save_path="/home/guozr/CODE/AMP/profiling_ltdog_Qwen1.5-32B_0")

@@ -1,17 +1,18 @@
+import argparse
 import os
 import os.path as osp
 import platform
 import re
 import subprocess
-import time
 from datetime import datetime
 from functools import wraps
 
-import openi
 import torch_npu
 from huggingface_hub import snapshot_download as hf_snapshot_download
 from loguru import logger
-import argparse
+from openi import upload_model
+from openmind_hub import snapshot_download as om_snapshot_download
+from openmind_hub import upload_folder
 
 
 def modelers2openi(model_id, openi_repo_id: str, path: str = None, if_hf: bool = False):
@@ -23,7 +24,7 @@ def modelers2openi(model_id, openi_repo_id: str, path: str = None, if_hf: bool =
         else:
             from openmind_hub import snapshot_download
         path = snapshot_download(model_id)
-    openi.upload_model(openi_repo_id, model_name, path)
+    upload_model(openi_repo_id, model_name, path)
 
 
 def reupload2modelers(model_name: str, owner: str):
@@ -42,14 +43,11 @@ def reupload2modelers(model_name: str, owner: str):
         repo_id=new_model_name,
     )
 
-def _find_latest_prof_folder(base_path):
-    folder_pattern = re.compile(
-        rf"^{platform.node()}_([0-9]+)_([0-9]{{17}})_ascend_pt$"
-    )
 
+def _find_latest_prof_folder(base_path):
+    folder_pattern = re.compile(rf"^{platform.node()}_([0-9]+)_([0-9]{{17}})_ascend_pt$")
     latest_folder = None
     latest_time = None
-
     for folder_name in os.listdir(base_path):
         match = folder_pattern.match(folder_name)
         if match:
@@ -68,38 +66,6 @@ def _find_latest_prof_folder(base_path):
         return latest_folder
     raise ValueError(f"No valid folder found under the base path: {base_path}.")
 
-
-def inference_prof(prof_save_path: str = "./"):
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            experimental_config = torch_npu.profiler._ExperimentalConfig(
-                aic_metrics=torch_npu.profiler.AiCMetrics.PipeUtilization,
-                profiler_level=torch_npu.profiler.ProfilerLevel.Level1,
-                l2_cache=False,
-            )
-            prof = torch_npu.profiler.profile(
-                activities=[
-                    torch_npu.profiler.ProfilerActivity.CPU,
-                    torch_npu.profiler.ProfilerActivity.NPU,
-                ],
-                on_trace_ready=torch_npu.profiler.tensorboard_trace_handler(
-                    prof_save_path
-                ),
-                record_shapes=True,
-                profile_memory=True,
-                with_stack=True,
-                with_flops=False,
-                with_modules=False,
-                experimental_config=experimental_config,
-            )
-            prof.start()
-            func(*args, **kwargs)
-            prof.stop()
-
-        return wrapper
-
-    return decorator
 
 
 def run_advisor(prof_save_path: str = "./"):
@@ -137,43 +103,10 @@ def run_compare(task_1: str, task_2: str, save_path: str):
     logger.info(" ".join(command))
     subprocess.run(command, cwd=save_path)
 
-def parse_arguments():
-    parser = argparse.ArgumentParser(
-        description="Process one or more model names with a specified AMP."
-    )
-    parser.add_argument(
-        'models',
-        metavar='MODEL',
-        type=str,
-        nargs='+',
-        help='One or more model names to process.'
-    )
-    parser.add_argument(
-        '--amp',
-        type=str,
-        default='starmountain1997/AMP',
-        help='AMP name to use with the models (default: starmountain1997/AMP).'
-    )
-    return parser.parse_args()
 
-def main():
-    args = parse_arguments()
-    amp_name = args.amp
-    models = args.models
-
-    while True:
-        try:
-            for model in models:
-                modelers2openi(model, amp_name)
-            print("All models processed successfully.")
-            break  # Exit the loop if all models are processed without exceptions
-        except Exception as e:
-            print(f"An error occurred: {e}. Retrying...")
-            time.sleep(5)  # Wait for 5 seconds before retrying
-
-if __name__=="__main__":
-            # modelers2openi("zyl9737/deepseek-coder-6.7b-instruct","starmountain1997/AMP")
-            # modelers2openi("libo2024/Yi-9B-200K","starmountain1997/AMP")
-            # modelers2openi("ccpower/Bunny-Llama-3-8B-V","starmountain1997/AMP")
-            # modelers2openi("ltdog/Qwen1.5-32B","starmountain1997/AMP")
-            main()
+if __name__ == "__main__":
+    # modelers2openi("zyl9737/deepseek-coder-6.7b-instruct","starmountain1997/AMP")
+    # modelers2openi("libo2024/Yi-9B-200K","starmountain1997/AMP")
+    # modelers2openi("ccpower/Bunny-Llama-3-8B-V","starmountain1997/AMP")
+    modelers2openi("ltdog/Qwen1.5-32B", "starmountain1997/AMP")
+    # main()
