@@ -3,8 +3,8 @@ import inspect
 from typing import Callable
 
 import astor
-import transformers
-import transformers.dynamic_module_utils
+from transformers.dynamic_module_utils import get_class_in_module
+from loguru import logger
 
 
 def patch_get_class_in_module(func: Callable) -> Callable:
@@ -14,7 +14,7 @@ def patch_get_class_in_module(func: Callable) -> Callable:
     """
 
     # 获取原始函数的源代码
-    ori_get_class_in_module = transformers.dynamic_module_utils.get_class_in_module
+    ori_get_class_in_module = get_class_in_module
     try:
         original_source = inspect.getsource(ori_get_class_in_module)
     except OSError as e:
@@ -68,7 +68,15 @@ def patch_get_class_in_module(func: Callable) -> Callable:
     # Execute the modified code within the original globals
     exec(modified_code, ori_globals)
 
+    if "get_class_in_module" in ori_globals:
+        get_class_in_module_patched = ori_globals["get_class_in_module"]
+    elif "om_get_class_in_module" in ori_globals:
+        # 适配 openmind
+        logger.warning("使用了 'om_get_class_in_module' 函数。")
+        get_class_in_module_patched = ori_globals["om_get_class_in_module"]
+    else:
+        raise RuntimeError("无法找到 'get_class_in_module' 或 'om_get_class_in_module' 函数。")
+
     # Retrieve the patched function from globals
-    get_class_in_module_patched = ori_globals["get_class_in_module"]
 
     return get_class_in_module_patched

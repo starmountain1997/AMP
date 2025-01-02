@@ -11,7 +11,7 @@ def patch_deepseek_coder(mod):
          deepseek-coder-33b-instruct
          deepseek-coder-6.7b-base
          deepseek-coder-7b-instruct-v1.5
-         
+
     """
     logger.info("patched deepseek_coder")
     mod.models.llama.modeling_llama.LlamaRMSNorm.forward = llama_rms_norm_forward
