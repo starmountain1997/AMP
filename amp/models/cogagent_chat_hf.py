@@ -3,8 +3,8 @@ import sys
 import types
 
 import torch
-import torch_npu
 import torch.nn.functional as F
+import torch_npu
 from loguru import logger
 
 from ..common.patch_transformers import patch_get_class_in_module
@@ -151,17 +151,20 @@ def attention_forward_cross_visual(self, x, rel_pos_bias=None, attn_mask=None):
         x = self.proj_drop(x)
     return x
 
+
 class FastGelu(torch.nn.GELU):
     def forward(self, input_data):
         return torch_npu.fast_gelu(input_data)
 
+
 def rms_norm_forward(self, hidden_states):
-        input_dtype = hidden_states.dtype
-        return torch_npu.npu_rms_norm(
+    input_dtype = hidden_states.dtype
+    return torch_npu.npu_rms_norm(
         hidden_states,
-        self.weight,            # match input's float type for weight
-        epsilon=self.variance_epsilon
+        self.weight,  # match input's float type for weight
+        epsilon=self.variance_epsilon,
     )[0].to(input_dtype)
+
 
 def npu_rotate_half(x):
     r1 = torch.zeros_like(x)
@@ -169,6 +172,7 @@ def npu_rotate_half(x):
 
     rotated_output = torch_npu.npu_rotary_mul(x, r1, r2)
     return rotated_output
+
 
 def _patch_cogagent_chat_hf(mod):
     package_name = mod.__name__.split(".")[-1]
@@ -180,8 +184,8 @@ def _patch_cogagent_chat_hf(mod):
 
     if package_name == "modeling_cogagent":
         logger.info(f"{mod} is patched.")
-        mod.RMSNorm.forward = rms_norm_forward # 调优
-        mod.rotate_half = npu_rotate_half # 调优
+        mod.RMSNorm.forward = rms_norm_forward  # 调优
+        mod.rotate_half = npu_rotate_half  # 调优
 
         package_split = mod.__name__.split(".")
         package_split[-1] = "visual"
@@ -190,7 +194,7 @@ def _patch_cogagent_chat_hf(mod):
         logger.info(f"{visual_mod} is patched.")
         visual_mod.Attention.forward = attention_forward_visual
 
-        visual_mod.GLU.act1 = FastGelu() # 调优
+        visual_mod.GLU.act1 = FastGelu()  # 调优
 
         package_split[-1] = "cross_visual"
         cross_visual_mod = ".".join(package_split)

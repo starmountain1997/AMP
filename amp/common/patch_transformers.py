@@ -3,8 +3,8 @@ import inspect
 from typing import Callable
 
 import astor
-from transformers.dynamic_module_utils import get_class_in_module
 from loguru import logger
+from transformers.dynamic_module_utils import get_class_in_module
 
 
 def patch_get_class_in_module(func: Callable) -> Callable:
