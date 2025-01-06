@@ -33,5 +33,6 @@ tests/
 
 
 **/kernel_meta
-examples/
-docker/
+tests/
+.python-version
+poetry.lock

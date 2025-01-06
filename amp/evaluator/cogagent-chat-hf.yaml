@@ -1,0 +1,26 @@
+PLATFORM: &platform modelers
+
+model:
+  name: "openMind-ecosystem/cogagent-chat-hf"
+  platform: *platform
+  device_map: "npu:0"
+  torch_dtype: auto
+  load_class: AutoModelForCausalLM
+tokenizer: 
+  name: "openMind-ecosystem/vicuna-7b-v1.5"
+  platform: *platform
+  load_class: LlamaTokenizer
+profiler:
+  cache_level: 1
+  with_stack: true
+  record_shapes: true
+  profile_memory: true
+  with_flops: true
+  with_modules: true
+  save_path: "./"
+inference:
+  warmup_runs: 2
+  total_tokens: 1000
+  need_profiling: true
+  prompt: "Hello, how are you?"
+  if_chat: true
