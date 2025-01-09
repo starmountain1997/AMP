@@ -33,6 +33,9 @@ tests/
 
 
 **/kernel_meta
+**/fusion_result.json
+
+
 tests/
 .python-version
 poetry.lock
