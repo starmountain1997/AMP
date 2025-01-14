@@ -1,4 +1,5 @@
 import importlib
+import os
 import sys
 import types
 
@@ -9,6 +10,7 @@ from loguru import logger
 
 from ..common.patch_transformers import patch_get_class_in_module
 from ..module_patcher import when_imported
+from .common.index_input import patch_index_input
 
 
 def attention_forward_visual(self, x: "tensor(B, L, D)") -> "tensor(B, L, D)":
@@ -184,6 +186,8 @@ def _patch_cogagent_chat_hf(mod):
 
     if package_name == "modeling_cogagent":
         logger.info(f"{mod} is patched.")
+        patch_index_input(mod, mod.CogAgentModel.forward)
+
         mod.RMSNorm.forward = rms_norm_forward  # 调优
         mod.rotate_half = npu_rotate_half  # 调优
 
@@ -211,6 +215,9 @@ def patch_cogagent_chat_hf(mod):
         logger.warning(
             f"when running cogagent_chat_hf, please install transformers==4.40.2, but got: {mod.__version__}"
         )
+
+    os.environ["TASK_QUEUE_ENABLE"] = "2"
+    os.environ["PYTORCH_NPU_ALLOC_CONF"] = "expandable_segments:True"
 
     get_class_in_module_patched = patch_get_class_in_module(
         func=_patch_cogagent_chat_hf

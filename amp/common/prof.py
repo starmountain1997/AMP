@@ -11,7 +11,6 @@ from datetime import datetime
 
 import torch
 from loguru import logger
-from openmind import is_torch_npu_available
 from torch.profiler import record_function
 from transformers import (PreTrainedModel, PreTrainedTokenizer,
                           TextIteratorStreamer)
@@ -40,56 +39,6 @@ def _find_latest_prof_folder(base_path: str) -> str:
     if latest_folder:
         return latest_folder
     raise ValueError(f"No valid folder found under the base path: {base_path}.")
-
-
-def get_profiler(device: str = None, save_path="./"):
-    if device:
-        pass
-    elif is_torch_npu_available():
-        device = "npu"
-    elif torch.cuda.is_available():
-        device = "cuda"
-    else:
-        device = "cpu"
-
-    if device.startswith("npu"):
-        import torch_npu
-
-        experimental_config = torch_npu.profiler._ExperimentalConfig(
-            aic_metrics=torch_npu.profiler.AiCMetrics.PipeUtilization,
-            profiler_level=torch_npu.profiler.ProfilerLevel.Level0,
-            l2_cache=False,
-        )
-        prof = torch_npu.profiler.profile(
-            activities=[
-                torch_npu.profiler.ProfilerActivity.CPU,
-                torch_npu.profiler.ProfilerActivity.NPU,
-            ],
-            on_trace_ready=torch_npu.profiler.tensorboard_trace_handler(save_path),
-            record_shapes=False,  # 大模型膨胀较多
-            profile_memory=False,
-            with_stack=False,  # 大模型膨胀较多，但是堆栈信息是分析必须的
-            with_flops=False,
-            with_modules=False,
-            experimental_config=experimental_config,
-        )
-
-    elif device.startswith("cuda"):
-        prof = torch.profiler.profile(
-            activities=[
-                torch.profiler.ProfilerActivity.CPU,
-                torch.profiler.ProfilerActivity.CUDA,
-            ],
-            on_trace_ready=torch.profiler.tensorboard_trace_handler(save_path),
-            record_shapes=True,
-            profile_memory=True,
-            with_stack=True,
-            with_flops=True,
-            with_modules=True,
-        )
-    else:
-        raise NotImplementedError
-    return prof
 
 
 def run_advisor(prof_save_path: str = "./"):
@@ -184,11 +133,87 @@ def run_compare(task_1: str, task_2: str, save_path: str):
     subprocess.run(command, cwd=save_path)
 
 
-def torch_profiler_wrapper(func):
+def get_profiler(device: str, save_path: str):
+    """
+    Initialize the profiler based on the device type.
+
+    Args:
+        device (str): The type of device ('cuda', 'cpu', 'npu', etc.).
+        save_path (str): Path to save profiler results.
+
+    Returns:
+        profiler: Configured profiler instance.
+    """
+    if device.startswith("npu"):
+        import torch_npu
+
+        experimental_config = torch_npu.profiler._ExperimentalConfig(
+            aic_metrics=torch_npu.profiler.AiCMetrics.PipeUtilization,
+            profiler_level=torch_npu.profiler.ProfilerLevel.Level0,
+            l2_cache=False,
+        )
+        prof = torch_npu.profiler.profile(
+            activities=[
+                torch_npu.profiler.ProfilerActivity.CPU,
+                torch_npu.profiler.ProfilerActivity.NPU,
+            ],
+            on_trace_ready=torch_npu.profiler.tensorboard_trace_handler(save_path),
+            record_shapes=False,  # Large models can inflate this
+            profile_memory=False,
+            with_stack=True,  # Necessary for analysis despite inflation
+            with_flops=False,
+            with_modules=False,
+            experimental_config=experimental_config,
+        )
+
+    elif device.startswith("cuda"):
+        prof = torch.profiler.profile(
+            activities=[
+                torch.profiler.ProfilerActivity.CPU,
+                torch.profiler.ProfilerActivity.CUDA,
+            ],
+            on_trace_ready=torch.profiler.tensorboard_trace_handler(save_path),
+            record_shapes=True,
+            profile_memory=True,
+            with_stack=True,
+            with_flops=True,
+            with_modules=True,
+        )
+    elif device.startswith("cpu"):
+        # Optional: Handle CPU profiling if needed
+        prof = torch.profiler.profile(
+            activities=[torch.profiler.ProfilerActivity.CPU],
+            on_trace_ready=torch.profiler.tensorboard_trace_handler(save_path),
+            record_shapes=True,
+            profile_memory=True,
+            with_stack=True,
+            with_flops=False,
+            with_modules=False,
+        )
+    else:
+        raise NotImplementedError(f"Profiler for device '{device}' is not implemented.")
+
+    return prof
+
+
+def torch_profiler_wrapper(device: str, save_path: str, func):
+    """
+    Decorator to wrap a function with profiler based on the device type.
+
+    Args:
+        device (str): The type of device ('cuda', 'cpu', 'npu', etc.).
+        save_path (str): Path to save profiler results.
+        func (callable): The function to be profiled.
+
+    Returns:
+        callable: Wrapped function with profiling.
+    """
+
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        # Initialize the profiler
-        prof = get_profiler()
+        # Initialize the profiler with the device and save_path
+        prof = get_profiler(device, save_path)
+        logger.info(f"getting profiler in {device}, save to: {save_path}.")
         with prof:
             with record_function("forward"):
                 result = func(*args, **kwargs)
@@ -199,20 +224,60 @@ def torch_profiler_wrapper(func):
 
 
 @contextmanager
-def patch_forward_with_profiler(model):
+def patch_forward_with_profiler(model, save_path: str = "./"):
+    """
+    Context manager to patch the model's forward method with profiler.
+
+    Args:
+        model (torch.nn.Module): The PyTorch model to patch.
+        save_path (str): Path to save profiler results.
+    """
     original_forward = model.forward
-    model.forward = torch_profiler_wrapper(original_forward)
+
     try:
+        # Determine the device string from the model
+        try:
+            device = next(model.parameters()).device
+        except StopIteration:
+            raise ValueError("The model has no parameters to determine the device.")
+
+        device_str = device.type  # e.g., 'cuda', 'cpu', 'npu'
+
+        # Wrap the original forward method with profiler
+        model.forward = torch_profiler_wrapper(device_str, save_path, original_forward)
+
         yield
     finally:
+        # Restore the original forward method
         model.forward = original_forward
 
 
 @contextmanager
-def patch_generate_with_profiler(model):
+def patch_generate_with_profiler(model: PreTrainedModel, save_path: str = "./"):
+    """
+    Context manager to patch the model's generate method with profiler.
+
+    Args:
+        model (PreTrainedModel): The Hugging Face PreTrainedModel to patch.
+        save_path (str): Path to save profiler results.
+    """
     original_generate = model.generate
-    model.generate = torch_profiler_wrapper(original_generate)
+
     try:
+        # Determine the device string from the model
+        try:
+            device = next(model.parameters()).device
+        except StopIteration:
+            raise ValueError("The model has no parameters to determine the device.")
+
+        device_str = device.type  # e.g., 'cuda', 'cpu', 'npu'
+
+        # Wrap the original generate method with profiler
+        model.generate = torch_profiler_wrapper(
+            device_str, save_path, original_generate
+        )
+
         yield
     finally:
+        # Restore the original generate method
         model.generate = original_generate

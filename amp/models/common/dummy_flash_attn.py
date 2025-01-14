@@ -3,7 +3,6 @@ from typing import Optional, Union
 import torch
 
 # https://github.com/Dao-AILab/flash-attention/blob/main/flash_attn/ops/triton/rotary.py
-# https://www.hiascend.com/document/detail/zh/Pytorch/60RC3/ptmoddevg/trainingmigrguide/performance_tuning_0023.html
 
 
 def apply_rotary_positional_embeddings(
@@ -171,6 +170,24 @@ def apply_rotary_positional_embeddings(
     return out
 
 
+def get_rotary_positional_embeddings(seqlen, rotary_dim_half, batch=1, device="npu"):
+    position = torch.arange(seqlen, device=device).unsqueeze(1)  # [seqlen, 1]
+    dim = torch.arange(rotary_dim_half, device=device).unsqueeze(
+        0
+    )  # [1, rotary_dim_half]
+    theta = 10000 ** (2 * (dim // 2) / rotary_dim_half)  # [1, rotary_dim_half]
+    angles = position / theta  # [seqlen, rotary_dim_half]
+
+    cos = (
+        torch.cos(angles).unsqueeze(0).repeat(batch, 1, 1)
+    )  # [batch, seqlen, rotary_dim_half]
+    sin = (
+        torch.sin(angles).unsqueeze(0).repeat(batch, 1, 1)
+    )  # [batch, seqlen, rotary_dim_half]
+
+    return cos, sin
+
+
 def apply_rotary_pytorch(
     x: torch.Tensor,
     cos: torch.Tensor,
@@ -196,7 +213,10 @@ def apply_rotary_pytorch(
     """
 
     batch, nheads, seqlen, headdim = x.shape
-
+    if len(cos.shape) == 2:
+        cos, sin = get_rotary_positional_embeddings(
+            seqlen, cos.shape[-1], batch, device=cos.device
+        )
     batch_ro, seqlen_ro, rotary_dim = cos.shape
 
     assert batch == batch_ro
@@ -228,4 +248,98 @@ def apply_rotary_pytorch(
 
     output = apply_rotary_positional_embeddings(
         x=x, cos=cos, sin=sin, is_varlen=False, conjugate=conjugate
+    )
+
+
+class ApplyRotaryEmb(torch.autograd.Function):
+    @staticmethod
+    def forward(
+        ctx,
+        x,
+        cos,
+        sin,
+        interleaved=False,
+        inplace=False,
+        seqlen_offsets: Union[int, torch.Tensor] = 0,
+        cu_seqlens: Optional[torch.Tensor] = None,
+        max_seqlen: Optional[int] = None,
+    ):
+        out = apply_rotary_pytorch(
+            x,
+            cos,
+            sin,
+            seqlen_offsets=seqlen_offsets,
+            cu_seqlens=cu_seqlens,
+            max_seqlen=max_seqlen,
+            interleaved=interleaved,
+            inplace=inplace,
+        )
+        if isinstance(seqlen_offsets, int):
+            ctx.save_for_backward(
+                cos, sin, cu_seqlens
+            )  # Can't save int with save_for_backward
+            ctx.seqlen_offsets = seqlen_offsets
+        else:
+            ctx.save_for_backward(cos, sin, cu_seqlens, seqlen_offsets)
+            ctx.seqlen_offsets = None
+        ctx.interleaved = interleaved
+        ctx.inplace = inplace
+        ctx.max_seqlen = max_seqlen
+        return out if not inplace else x
+
+    @staticmethod
+    def backward(ctx, do):
+        seqlen_offsets = ctx.seqlen_offsets
+        if seqlen_offsets is None:
+            cos, sin, cu_seqlens, seqlen_offsets = ctx.saved_tensors
+        else:
+            cos, sin, cu_seqlens = ctx.saved_tensors
+        # TD [2023-09-02]: For some reason Triton (2.0.0.post1) errors with
+        # "[CUDA]: invalid device context", and cloning makes it work. Idk why. Triton 2.1.0 works.
+        if not ctx.interleaved and not ctx.inplace:
+            do = do.clone()
+        dx = apply_rotary_pytorch(
+            do,
+            cos,
+            sin,
+            seqlen_offsets=seqlen_offsets,
+            cu_seqlens=cu_seqlens,
+            max_seqlen=ctx.max_seqlen,
+            interleaved=ctx.interleaved,
+            inplace=ctx.inplace,
+            conjugate=True,
+        )
+        return dx, None, None, None, None, None, None, None
+
+
+def apply_rotary_emb(
+    x,
+    cos,
+    sin,
+    interleaved=False,
+    inplace=False,
+    seqlen_offsets: Union[int, torch.Tensor] = 0,
+    cu_seqlens: Optional[torch.Tensor] = None,
+    max_seqlen: Optional[int] = None,
+):
+    """
+    Arguments:
+        x: (batch_size, seqlen, nheads, headdim) if cu_seqlens is None
+            else (total_seqlen, nheads, headdim)
+        cos, sin: (seqlen_rotary, rotary_dim / 2)
+        interleaved: if True, rotate pairs of even and odd dimensions (GPT-J style) instead
+            of 1st half and 2nd half (GPT-NeoX style).
+        inplace: if True, apply rotary embedding in-place.
+        seqlen_offsets: (batch_size,) or int. Each sequence in x is shifted by this amount.
+            Most commonly used in inference when we have KV cache.
+        cu_seqlens: (batch + 1,) or None
+        max_seqlen: int
+    Return:
+        out: (batch_size, seqlen, nheads, headdim) if cu_seqlens is None
+            else (total_seqlen, nheads, headdim)
+    rotary_dim must be <= headdim
+    Apply rotary embedding to the first rotary_dim of x.
+    """
+    return ApplyRotaryEmb.apply(
+        x, cos, sin, interleaved, inplace, seqlen_offsets, cu_seqlens, max_seqlen
     )
