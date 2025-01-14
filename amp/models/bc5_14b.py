@@ -10,7 +10,6 @@ from loguru import logger
 from ..common.patch_transformers import patch_get_class_in_module
 from ..module_patcher import when_imported
 from .common.dummy_flash_attn import apply_rotary_emb
-
 # https://www.hiascend.com/document/detail/zh/Pytorch/60RC1/ptmoddevg/trainingmigrguide/performance_tuning_0027.html
 
 
@@ -30,143 +29,42 @@ def flash_attention_forward_npu(
     softcap: Optional[float] = None,
     deterministic: bool = None,
 ):
+    device = query_states.device
+
     if not use_top_left_mask:
         causal = is_causal
     else:
-        causal = is_causal and (query_length != 1)
+        causal = is_causal and query_length != 1
 
-    (sliding_window is not None and key_states.shape[1] > sliding_window)
-    if softmax_scale is None:
-        softmax_scale = 1.0 / math.sqrt(query_states.shape[-1])
-
-    attn_output = None
-
-    def build_causal_mask_npu(size: int, device: torch.device):
-        mask = np.triu(np.ones([size, size]), k=1).astype(np.bool_)
-        return torch.from_numpy(mask).bool().to(device)
+    atten_mask = (
+        torch.from_numpy(np.triu(np.ones([2048, 2048]), k=1)).bool().to(device)
+        if causal
+        else None
+    )  # FIXME:
+    sparse_mode = 3 if causal else 2
+    scale = (
+        softmax_scale
+        if softmax_scale is not None
+        else 1.0 / math.sqrt(query_states.shape[-1])
+    )
 
     if seqlens is not None:
-        batch_size = query_states.shape[0]
-        cu_seqlens_q = seqlens
-        cu_seqlens_k = seqlens
-        actual_seq_qlen = tuple(cu_seqlens_q[1:].cpu().numpy().tolist())
-        actual_seq_kvlen = tuple(cu_seqlens_k[1:].cpu().numpy().tolist())
-
-        if causal:
-            device = query_states.device
-            atten_mask_npu = build_causal_mask_npu(2048, device)
-            head_num = query_states.shape[
-                1
-            ]  # For varlen layout TND, dimension 1 is # of heads
-
-            output = torch_npu.npu_fusion_attention(
-                query_states,
-                key_states,
-                value_states,
-                head_num,
-                pse=None,
-                padding_mask=None,
-                atten_mask=atten_mask_npu,
-                scale=softmax_scale,
-                keep_prob=1.0,  # No dropout
-                input_layout="TND",
-                actual_seq_qlen=actual_seq_qlen,
-                actual_seq_kvlen=actual_seq_kvlen,
-                sparse_mode=3,  # required for causal
-            )[0]
-
-        else:
-            head_num = query_states.shape[1]
-            output = torch_npu.npu_fusion_attention(
-                query_states,
-                key_states,
-                value_states,
-                head_num,
-                pse=None,
-                atten_mask=None,
-                scale=softmax_scale,
-                keep_prob=1.0,
-                input_layout="TND",
-                actual_seq_qlen=actual_seq_qlen,
-                actual_seq_kvlen=actual_seq_kvlen,
-            )[0]
-
-        attn_output = output.reshape(batch_size, -1, output.size(-2), output.size(-1))
-
+        raise NotImplementedError
     elif attention_mask is not None:
-        batch_size = query_states.shape[0]
-        cu_seqlens_q = ...
-        cu_seqlens_k = ...
-        actual_seq_qlen = tuple(cu_seqlens_q[1:].cpu().numpy().tolist())
-        actual_seq_kvlen = tuple(cu_seqlens_k[1:].cpu().numpy().tolist())
-
-        if causal:
-            device = query_states.device
-            atten_mask_npu = build_causal_mask_npu(2048, device)
-            head_num = query_states.shape[1]  # TND
-            output = torch_npu.npu_fusion_attention(
-                query_states,
-                key_states,
-                value_states,
-                head_num,
-                pse=None,
-                padding_mask=None,
-                atten_mask=atten_mask_npu,
-                scale=softmax_scale,
-                keep_prob=1.0,
-                input_layout="TND",
-                actual_seq_qlen=actual_seq_qlen,
-                actual_seq_kvlen=actual_seq_kvlen,
-                sparse_mode=3,
-            )[0]
-        else:
-            head_num = query_states.shape[1]
-            output = torch_npu.npu_fusion_attention(
-                query_states,
-                key_states,
-                value_states,
-                head_num,
-                pse=None,
-                atten_mask=None,
-                scale=softmax_scale,
-                keep_prob=1.0,
-                input_layout="TND",
-                actual_seq_qlen=actual_seq_qlen,
-                actual_seq_kvlen=actual_seq_kvlen,
-            )[0]
-
-        attn_output = output.reshape(batch_size, -1, output.size(-2), output.size(-1))
-
+        raise NotImplementedError
     else:
-        scale = softmax_scale
-        device = query_states.device
-        head_num = query_states.shape[2]
-
-        if causal:
-            atten_mask_npu = build_causal_mask_npu(2048, device)
-            out = torch_npu.npu_fusion_attention(
-                query_states,
-                key_states,
-                value_states,
-                head_num,
-                "BSND",
-                keep_prob=1.0,
-                scale=scale,
-                atten_mask=atten_mask_npu,
-                sparse_mode=3,
-            )[0]
-        else:
-            out = torch_npu.npu_fusion_attention(
-                query_states,
-                key_states,
-                value_states,
-                head_num,
-                "BSND",
-                keep_prob=1.0,
-                scale=scale,
-            )[0]
-
-        attn_output = out
+        attn_output = torch_npu.npu_fusion_attention(
+            query_states,
+            key_states,
+            value_states,
+            head_num=query_states.shape[2],
+            input_layout="BSND",
+            pse=None,
+            keep_prob=1.0,
+            scale=scale,
+            atten_mask=atten_mask,
+            sparse_mode=sparse_mode,
+        )[0]
 
     return attn_output
 
@@ -235,5 +133,6 @@ def _patch_bc5_14b(mod):
 
 @when_imported("transformers")
 def patch_bc5_14b(mod):
+    os.environ["ASCEND_LAUNCH_BLOCKING"] = "1"
     get_class_in_module_patched = patch_get_class_in_module(func=_patch_bc5_14b)
     mod.dynamic_module_utils.get_class_in_module = get_class_in_module_patched
