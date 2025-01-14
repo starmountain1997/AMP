@@ -1,5 +1,7 @@
 import math
 import os
+import sys
+import types
 from typing import Optional
 
 import numpy as np
@@ -10,6 +12,7 @@ from loguru import logger
 from ..common.patch_transformers import patch_get_class_in_module
 from ..module_patcher import when_imported
 from .common.dummy_flash_attn import apply_rotary_emb
+
 # https://www.hiascend.com/document/detail/zh/Pytorch/60RC1/ptmoddevg/trainingmigrguide/performance_tuning_0027.html
 
 
@@ -69,66 +72,20 @@ def flash_attention_forward_npu(
     return attn_output
 
 
-def rotary_embedding_forward(
-    self, q, k, seqlen_offset=None, cu_seqlens=None, max_seqlen=None
-):
-    # x: [bs, num_attention_heads, seq_len, head_size]
-    # This `if` block is unlikely to be run after we build sin/cos in `__init__`. Keep the logic here just in case.
-    seq_len_dim = 1
-    seq_len = q.shape[seq_len_dim] + seqlen_offset
-    if seq_len > self.max_seq_len_cached:
-        self.max_seq_len_cached = seq_len
-        self.inv_freq = 1.0 / (
-            self.base
-            ** (
-                torch.arange(0, self.dim, 2).float().to(self.inv_freq.device) / self.dim
-            )
-        )
-        t = torch.arange(
-            self.max_seq_len_cached,
-            device=self.inv_freq.device,
-            dtype=self.inv_freq.dtype,
-        )
-        # freqs = torch.einsum("i,j->ij", t, self.inv_freq) # dont use this, bug in fp16
-        freqs = torch.outer(t, self.inv_freq)
-        self.cos_cached = freqs.cos().to(q.device)
-        self.sin_cached = freqs.sin().to(k.device)
-    q_ori_size = q.size()
-    k_ori_size = k.size()
-    if cu_seqlens is not None:
-        q = flatten_one_dim(q)
-        k = flatten_one_dim(k)
-    q_new = apply_rotary_emb(
-        q.float(),
-        self.cos_cached[seqlen_offset:],
-        self.sin_cached[seqlen_offset:],
-        self.interleaved,
-        True,  # inplace=True
-        cu_seqlens=cu_seqlens,
-        max_seqlen=max_seqlen,
-    ).to(q.dtype)
-    k_new = apply_rotary_emb(
-        k.float(),
-        self.cos_cached[seqlen_offset:],
-        self.sin_cached[seqlen_offset:],
-        self.interleaved,
-        True,
-        cu_seqlens=cu_seqlens,
-        max_seqlen=max_seqlen,
-    ).to(k.dtype)
-    if cu_seqlens is not None:
-        q_new = q_new.reshape(*q_ori_size)
-        k_new = k_new.reshape(*k_ori_size)
-    return q_new, k_new
-
-
 def _patch_bc5_14b(mod):
     package_name = mod.__name__.split(".")[-1]
+    # Create a dummy `xformers` module
+    flash_attn = types.ModuleType("flash_attn")
+    flash_attn.layers = types.ModuleType("flash_attn.layers")
+    flash_attn.layers.rotary = types.ModuleType("flash_attn.layers.rotary")
+    flash_attn.layers.rotary.apply_rotary_emb_func = apply_rotary_emb
+    sys.modules["flash_attn"] = flash_attn
+    sys.modules["flash_attn.layers"] = flash_attn.layers
+    sys.modules["flash_attn.layers.rotary"] = flash_attn.layers.rotary
 
     if package_name == "modeling_baichuan":
         logger.info(f"{mod} is patched.")
         mod.flash_attention_forward = flash_attention_forward_npu
-        mod.RotaryEmbedding.forward = rotary_embedding_forward
 
 
 @when_imported("transformers")

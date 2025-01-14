@@ -160,7 +160,7 @@ def get_profiler(device: str, save_path: str):
             on_trace_ready=torch_npu.profiler.tensorboard_trace_handler(save_path),
             record_shapes=False,  # Large models can inflate this
             profile_memory=False,
-            with_stack=True,  # Necessary for analysis despite inflation
+            with_stack=False,  # Necessary for analysis despite inflation
             with_flops=False,
             with_modules=False,
             experimental_config=experimental_config,
