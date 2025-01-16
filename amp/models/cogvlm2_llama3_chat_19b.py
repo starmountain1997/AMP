@@ -11,6 +11,8 @@ from ..common.patch_transformers import patch_get_class_in_module
 from ..module_patcher import when_imported
 from .common.index_input import patch_index_input
 
+# https://huggingface.co/THUDM/cogvlm2-llama3-chat-19B/blob/main/util.py
+
 
 def apply_rotary_positional_embeddings(
     x: torch.Tensor,
@@ -22,6 +24,7 @@ def apply_rotary_positional_embeddings(
     is_seqlen_offsets_tensor: bool = False,
     interleaved: bool = False,
     conjugate: bool = False,
+    inplace: bool = False,
 ) -> torch.Tensor:
     """
     cogvlm 魔改版
@@ -51,7 +54,10 @@ def apply_rotary_positional_embeddings(
     assert rotary_dim <= headdim, "Rotary dimension must be <= head dimension"
 
     # Prepare the output tensor
-    out = x.clone()
+    out = torch.empty_like(x) if not inplace else x
+    if rotary_dim < headdim and not inplace:
+        logger.warning("coping")
+        out[..., rotary_dim:].copy_(x[..., rotary_dim:])
 
     # Apply rotary embeddings
     if not is_varlen:
@@ -99,13 +105,10 @@ def apply_rotary_positional_embeddings(
         out = torch.cat([out_rotary, x_rest], dim=-1)
 
     else:
-        # Variable-length sequences
-        # cu_seqlens should be a 1D tensor of cumulative lengths with shape (batch + 1,)
         assert (
             cu_seqlens is not None
         ), "cu_seqlens must be provided for variable-length sequences"
 
-        # Initialize output
         out = torch.zeros_like(x)
 
         for b in range(batch):
@@ -113,7 +116,6 @@ def apply_rotary_positional_embeddings(
             end_idx = cu_seqlens[b + 1].item()
             current_seqlen = end_idx - start_idx
 
-            # Handle if seqlen_offsets is a tensor
             if is_seqlen_offsets_tensor and seqlen_offsets is not None:
                 offset = seqlen_offsets[b].item()
             elif seqlen_offsets is not None:
@@ -220,7 +222,7 @@ def apply_rotary_cogvlm(
         assert seqlen_offsets + seqlen <= seqlen_ro
 
     output = apply_rotary_positional_embeddings(
-        x=x, cos=cos, sin=sin, is_varlen=False, conjugate=conjugate
+        x=x, cos=cos, sin=sin, is_varlen=False, conjugate=conjugate, inplace=inplace
     )
 
     return output

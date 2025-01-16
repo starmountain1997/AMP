@@ -79,7 +79,19 @@ def _patch_bc5_14b(mod):
     flash_attn.layers = types.ModuleType("flash_attn.layers")
     flash_attn.layers.rotary = types.ModuleType("flash_attn.layers.rotary")
     flash_attn.layers.rotary.apply_rotary_emb_func = apply_rotary_emb
+
+    flash_attn.bert_padding = types.ModuleType("flash_attn.bert_padding")
+    flash_attn.bert_padding.index_first_axis = (
+        None  # Replace with actual function if needed
+    )
+    flash_attn.bert_padding.pad_input = None  # Replace with actual function if needed
+    flash_attn.bert_padding.unpad_input = None  # Replace with actual function if needed
+    flash_attn.flash_attn_func = None
+    flash_attn.flash_attn_varlen_func = None
+    flash_attn.flash_attn_with_kvcache = None
+
     sys.modules["flash_attn"] = flash_attn
+    sys.modules["flash_attn.bert_padding"] = flash_attn.bert_padding
     sys.modules["flash_attn.layers"] = flash_attn.layers
     sys.modules["flash_attn.layers.rotary"] = flash_attn.layers.rotary
 
@@ -91,5 +103,11 @@ def _patch_bc5_14b(mod):
 @when_imported("transformers")
 def patch_bc5_14b(mod):
     os.environ["ASCEND_LAUNCH_BLOCKING"] = "1"
+    mod.modeling_flash_attention_utils._flash_supports_window_size = None
+    mod.modeling_flash_attention_utils._upad_input = None
+    mod.modeling_flash_attention_utils.prepare_fa2_from_position_ids = None
+    mod.utils.is_flash_attn_2_available = lambda: True
+    mod.utils.is_flash_attn_greater_or_equal_2_10 = lambda: False
+
     get_class_in_module_patched = patch_get_class_in_module(func=_patch_bc5_14b)
     mod.dynamic_module_utils.get_class_in_module = get_class_in_module_patched

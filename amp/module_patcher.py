@@ -13,6 +13,7 @@ _target_modules = {
     "transformers.models.qwen2.modeling_qwen2",
     "transformers.models.mistral.modeling_mistral",
     "transformers.dynamic_module_utils",
+    "transformers.utils",
 }  # Whitelist of modules to monitor for post-import hooks
 
 

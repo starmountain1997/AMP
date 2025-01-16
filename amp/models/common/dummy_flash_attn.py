@@ -1,69 +1,65 @@
 from typing import Optional, Union
 
 import torch
-from loguru import logger
 
 # https://github.com/Dao-AILab/flash-attention/blob/main/flash_attn/ops/triton/rotary.py
 
 
-def apply_rotary_embedding(
+def rotary_kernel(
     x: torch.Tensor,
     cos: torch.Tensor,
     sin: torch.Tensor,
+    seqlen_offsets: Union[int, torch.Tensor],
+    cu_seqlens: Optional[torch.Tensor],
+    seqlen: int,
     rotary_dim: int,
     seqlen_ro: int,
+    interleaved: bool = False,
+    conjugate: bool = False,
 ) -> torch.Tensor:
-    """
-    Apply rotary embedding to the input tensor x.
-
-    Args:
-        x (torch.Tensor): Input tensor of shape [batch, seqlen, nheads, headdim].
-        cos (torch.Tensor): Cosine tensor of shape [seqlen_ro, rotary_dim//2].
-        sin (torch.Tensor): Sine tensor of shape [seqlen_ro, rotary_dim//2].
-        rotary_dim (int): Number of dimensions to apply rotary embedding to.
-        seqlen_ro (int): Sequence length up to which rotary embedding is applied.
-        mask (torch.Tensor, optional): Mask tensor of shape [batch, seqlen],
-                                       where 1 indicates valid positions and 0 indicates padding.
-
-    Returns:
-        torch.Tensor: Tensor with rotary embedding applied, same shape as x.
-    """
-    # Validate dimensions
-    assert x.dim() == 4, "Input tensor x must be 4-dimensional [batch, seqlen, nheads, headdim]"
     batch, seqlen, nheads, headdim = x.shape
-    assert headdim >= rotary_dim, "headdim must be greater than or equal to rotary_dim"
-    assert rotary_dim % 2 == 0, "rotary_dim must be divisible by 2"
+    rotary_dim_half = rotary_dim // 2
+    output = torch.empty_like(x)
 
-    # Adjust seqlen_ro if it exceeds the actual sequence length
-    seqlen_ro = min(seqlen_ro, seqlen)
+    if interleaved:
+        for b in range(batch):
+            for h in range(nheads):
+                x0 = x[b, :, h, 0::2]  # Even indices
+                x1 = x[b, :, h, 1::2]  # Odd indices
+                cos_b = cos[:, :rotary_dim_half]
+                sin_b = sin[:, :rotary_dim_half]
 
-    # Slice the tensor to apply rotary embedding only up to seqlen_ro
-    x_rot = x[:, :seqlen_ro, :, :rotary_dim]
+                if conjugate:
+                    sin_b = -sin_b
 
-    # Split the rotary dimensions into two halves
-    x1, x2 = x_rot[..., :rotary_dim//2], x_rot[..., rotary_dim//2:]
+                o0 = x0 * cos_b - x1 * sin_b
+                o1 = x0 * sin_b + x1 * cos_b
 
-    # Prepare cos and sin for broadcasting
-    # cos and sin should have shape [seqlen_ro, rotary_dim//2]
-    # Reshape to [1, seqlen_ro, 1, rotary_dim//2] for broadcasting
-    cos = cos[:seqlen_ro, :rotary_dim//2].unsqueeze(0).unsqueeze(2)  # [1, seqlen_ro, 1, rotary_dim//2]
-    sin = sin[:seqlen_ro, :rotary_dim//2].unsqueeze(0).unsqueeze(2)  # [1, seqlen_ro, 1, rotary_dim//2]
+                output[b, :, h, 0::2] = o0
+                output[b, :, h, 1::2] = o1
+    else:
+        for b in range(batch):
+            for h in range(nheads):
+                for m in range(seqlen):
+                    if m >= seqlen_ro:
+                        break
 
-    # Apply rotation
-    o1 = x1 * cos - x2 * sin
-    o2 = x1 * sin + x2 * cos
+                    x0 = x[b, m, h, :rotary_dim_half]
+                    x1 = x[b, m, h, rotary_dim_half:rotary_dim]
+                    cos_m = cos[m, :rotary_dim_half]
+                    sin_m = sin[m, :rotary_dim_half]
 
-    # Concatenate the rotated parts
-    x_rotated = torch.cat([o1, o2], dim=-1)
+                    if conjugate:
+                        sin_m = -sin_m
 
-    # Create a copy of x to avoid in-place modifications if necessary
-    x_out = x.clone()
+                    o0 = x0 * cos_m - x1 * sin_m
+                    o1 = x0 * sin_m + x1 * cos_m
 
+                    output[b, m, h, :rotary_dim_half] = o0
+                    output[b, m, h, rotary_dim_half:rotary_dim] = o1
 
-    # Replace the rotated part in the output tensor
-    x_out[:, :seqlen_ro, :, :rotary_dim] = x_rotated
+    return output
 
-    return x_out
 
 def apply_rotary_pytorch(
     x: torch.Tensor,
@@ -97,7 +93,7 @@ def apply_rotary_pytorch(
         ), "If cu_seqlens is passed in, then max_seqlen must be passed"
         total_seqlen, nheads, headdim = x.shape
         batch_p_1 = cu_seqlens.shape[0]
-        batch = batch_p_1 - 1
+        batch_p_1 - 1
         seqlen = max_seqlen
     seqlen_ro, rotary_dim = cos.shape
     assert sin.shape == cos.shape
@@ -114,17 +110,28 @@ def apply_rotary_pytorch(
     ), f"Input and cos/sin must have the same dtype, got {x.dtype} and {cos.dtype}"
 
     cos, sin = cos.contiguous(), sin.contiguous()
-    if isinstance(seqlen_offsets, torch.Tensor):
-        assert seqlen_offsets.shape == (batch,)
-        assert seqlen_offsets.dtype in [torch.int32, torch.int64]
-        seqlen_offsets = seqlen_offsets.contiguous()
-    else:
-        assert seqlen_offsets + seqlen <= seqlen_ro
 
-    out=apply_rotary_embedding(x, cos, sin, rotary_dim, seqlen_ro)
+    # if isinstance(seqlen_offsets, torch.Tensor):
+    #     assert seqlen_offsets.shape == (batch,)
+    #     assert seqlen_offsets.dtype in [torch.int32, torch.int64]
+    #     seqlen_offsets = seqlen_offsets.contiguous()
+    # else:
+    #     assert seqlen_offsets + seqlen <= seqlen_ro
 
-    
-    return out
+    output = rotary_kernel(
+        x,
+        cos,
+        sin,
+        seqlen_offsets,
+        cu_seqlens,
+        seqlen,
+        rotary_dim,
+        seqlen_ro,
+        interleaved,
+        conjugate,
+    )
+
+    return output
 
 
 class ApplyRotaryEmb(torch.autograd.Function):
