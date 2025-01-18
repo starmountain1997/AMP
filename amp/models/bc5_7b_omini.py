@@ -179,24 +179,6 @@ def baichuan_visual_encoder_fake_input(self, device):
     return [flatten_patches], [(1, merge_size, merge_size)], [1]
 
 
-def local_attention_forward(self, q, k, v, *args, use_flash=True, **kwargs):
-    # input q,k,v [batch_size, num_head, seq_len, head_dim]
-    # output [batch_size, seq_len, num_head, head_dim]
-    if use_flash:
-        q_len, num_heads = q.shape[2], q.shape[1]
-        q = q.transpose(1, 2).reshape(-1, num_heads, self.head_dim)
-        k = k.transpose(1, 2).reshape(-1, num_heads, self.head_dim)
-        v = v.transpose(1, 2).reshape(-1, num_heads, self.head_dim)
-        return q
-        # return flash_attn_varlen_func(q,k,v,*args, **kwargs).reshape(-1,q_len, num_heads, self.head_dim)
-    else:
-        with torch.backends.cuda.sdp_kernel(
-            enable_flash=False, enable_math=True, enable_mem_efficient=False
-        ):
-            attn_output = F.scaled_dot_product_attention(q, k, v, *args, **kwargs)
-        attn_output = attn_output.transpose(1, 2)
-        return attn_output
-
 
 def _patch_bc5_14b_omini(mod):
     package_name = mod.__name__.split(".")[-1]
@@ -229,18 +211,20 @@ def _patch_bc5_14b_omini(mod):
             baichuan_visual_encoder_fake_input
         )
 
-        package_split[-1] = "sequence_parallel_utils"
-        sequence_parallel_utils_mod = ".".join(package_split)
-        sequence_parallel_utils_mod = importlib.import_module(
-            sequence_parallel_utils_mod
-        )
-        logger.info(f"{sequence_parallel_utils_mod} is patched.")
+        # package_split[-1] = "sequence_parallel_utils"
+        # sequence_parallel_utils_mod = ".".join(package_split)
+        # sequence_parallel_utils_mod = importlib.import_module(
+        #     sequence_parallel_utils_mod
+        # )
+        # logger.info(f"{sequence_parallel_utils_mod} is patched.")
         # sequence_parallel_utils_mod.LocalAttention.forward = local_attention_forward
 
 
 @when_imported("transformers")
 def patch_bc5_7b_omini(mod):
     os.environ["ASCEND_LAUNCH_BLOCKING"] = "1"
+    create_dummy_flash_attn()
+
     mod.modeling_flash_attention_utils._flash_supports_window_size = None
     mod.modeling_flash_attention_utils._upad_input = None
     mod.modeling_flash_attention_utils.prepare_fa2_from_position_ids = None
@@ -253,4 +237,3 @@ def patch_bc5_7b_omini(mod):
     get_class_in_module_patched = patch_get_class_in_module(func=_patch_bc5_14b_omini)
     mod.dynamic_module_utils.get_class_in_module = get_class_in_module_patched
 
-    create_dummy_flash_attn()
