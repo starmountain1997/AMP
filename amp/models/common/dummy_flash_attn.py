@@ -1,8 +1,12 @@
+import importlib
+# https://github.com/Dao-AILab/flash-attention/blob/main/flash_attn/ops/triton/rotary.py
+import importlib.machinery
+import importlib.metadata
+import sys
+import types
 from typing import Optional, Union
 
 import torch
-
-# https://github.com/Dao-AILab/flash-attention/blob/main/flash_attn/ops/triton/rotary.py
 
 
 def rotary_kernel(
@@ -226,3 +230,47 @@ def apply_rotary_emb(
     return ApplyRotaryEmb.apply(
         x, cos, sin, interleaved, inplace, seqlen_offsets, cu_seqlens, max_seqlen
     )
+
+
+def create_dummy_flash_attn():
+    flash_attn = types.ModuleType("flash_attn")
+    sys.modules["flash_attn"] = flash_attn
+    flash_attn.__spec__ = importlib.machinery.ModuleSpec(
+        name="flash_attn",
+        loader=None,
+        origin="<dynamic>",
+    )
+    sys.modules["flash_attn"].__version__ = "0.1.0"
+
+    flash_attn.layers = types.ModuleType("flash_attn.layers")
+    sys.modules["flash_attn.layers"] = flash_attn.layers
+    flash_attn.layers.__spec__ = importlib.machinery.ModuleSpec(
+        name="flash_attn.layers",
+        loader=None,
+        origin="<dynamic>",
+    )
+
+    flash_attn.layers.rotary = types.ModuleType("flash_attn.layers.rotary")
+    sys.modules["flash_attn.layers.rotary"] = flash_attn.layers.rotary
+    flash_attn.layers.rotary.__spec__ = importlib.machinery.ModuleSpec(
+        name="flash_attn.layers.rotary",
+        loader=None,
+        origin="<dynamic>",
+    )
+
+    flash_attn.bert_padding = types.ModuleType("flash_attn.bert_padding")
+    sys.modules["flash_attn.bert_padding"] = flash_attn.bert_padding
+    flash_attn.bert_padding.__spec__ = importlib.machinery.ModuleSpec(
+        name="flash_attn.bert_padding",
+        loader=None,
+        origin="<dynamic>",
+    )
+
+    # Assign functions or attributes to the submodules
+    flash_attn.layers.rotary.apply_rotary_emb_func = apply_rotary_emb
+    flash_attn.bert_padding.index_first_axis = None
+    flash_attn.bert_padding.pad_input = None
+    flash_attn.bert_padding.unpad_input = None
+    flash_attn.flash_attn_func = None
+    flash_attn.flash_attn_varlen_func = None
+    flash_attn.flash_attn_with_kvcache = None

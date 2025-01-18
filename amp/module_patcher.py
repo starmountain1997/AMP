@@ -9,11 +9,13 @@ AMP_DIR = osp.dirname(osp.dirname(__file__))
 
 _post_import_hooks = defaultdict(list)
 _target_modules = {
-    "transformers.models.llama.modeling_llama",
-    "transformers.models.qwen2.modeling_qwen2",
-    "transformers.models.mistral.modeling_mistral",
+    "transformers.models.llama",
+    "transformers.models.qwen2",
+    "transformers.models.qwen2_vl",
+    "transformers.models.mistral",
     "transformers.dynamic_module_utils",
     "transformers.utils",
+    "flash_attn",
 }  # Whitelist of modules to monitor for post-import hooks
 
 
