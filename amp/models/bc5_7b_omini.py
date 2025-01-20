@@ -3,6 +3,7 @@ import math
 import os
 from typing import Optional, Tuple
 
+import av
 import numpy as np
 import torch
 import torch_npu
@@ -179,6 +180,65 @@ def baichuan_visual_encoder_fake_input(self, device):
     return [flatten_patches], [(1, merge_size, merge_size)], [1]
 
 
+def read_video_pyav(image_path, max_frame_number, decode_way):
+    if decode_way == "1fps":
+        try:
+            with av.open(image_path) as container:
+                stream = container.streams.video[0]
+                fps = int(stream.average_rate)
+
+                frames = []
+                frame_times = []
+                cnt = 0
+
+                for frame in container.decode(stream):
+                    if cnt % fps == 0:  # Extract 1 frame per second
+                        image = np.array(frame.to_image())
+                        frames.append(image)
+                        frame_time = int(frame.time * 1000)  # Convert to milliseconds
+                        frame_times.append(frame_time)
+                    cnt += 1
+
+        except Exception as e:
+            print(image_path)
+            print("error is", e)
+            return None
+
+    elif decode_way == "key":
+        try:
+            with av.open(image_path) as container:
+                stream = container.streams.video[0]
+                stream.codec_context.skip_frame = "NONKEY"
+
+                frames = []
+                frame_times = []
+
+                for frame in container.decode(stream):
+                    image = np.array(frame.to_image())
+                    frames.append(image)
+                    frame_time = int(frame.time * 1000)  # Convert to milliseconds
+                    frame_times.append(frame_time)
+
+        except Exception as e:
+            print("error is", e)
+            return None
+
+    else:
+        print("Invalid decode_way specified")
+        return None
+
+    # If no frames are extracted, return None
+    if not frames:
+        return None
+
+    # If the number of frames exceeds max_frame_number, uniformly sample frames
+    if len(frames) > max_frame_number > 0:
+        indices = np.linspace(0, len(frames) - 1, max_frame_number, dtype=int)
+        frames = [frames[i] for i in indices]
+        frame_times = [frame_times[i] for i in indices]
+
+    return frames, frame_times
+
 
 def _patch_bc5_14b_omini(mod):
     package_name = mod.__name__.split(".")[-1]
@@ -211,6 +271,12 @@ def _patch_bc5_14b_omini(mod):
             baichuan_visual_encoder_fake_input
         )
 
+        package_split[-1] = "processor_baichuan"
+        # TODO: 做个假的decord
+        processor_baichuan_mod = ".".join(package_split)
+        processor_baichuan_mod = importlib.import_module(processor_baichuan_mod)
+        processor_baichuan_mod.read_video = read_video_pyav
+
         # package_split[-1] = "sequence_parallel_utils"
         # sequence_parallel_utils_mod = ".".join(package_split)
         # sequence_parallel_utils_mod = importlib.import_module(
@@ -231,9 +297,8 @@ def patch_bc5_7b_omini(mod):
     mod.utils.is_flash_attn_2_available = lambda: True
     mod.utils.is_flash_attn_greater_or_equal_2_10 = lambda: False
     mod.models.qwen2_vl.modeling_qwen2_vl.VisionFlashAttention2.forward = (
-        vision_flash_attention2_forward  
+        vision_flash_attention2_forward
     )
 
     get_class_in_module_patched = patch_get_class_in_module(func=_patch_bc5_14b_omini)
     mod.dynamic_module_utils.get_class_in_module = get_class_in_module_patched
-
