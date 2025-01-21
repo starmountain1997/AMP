@@ -16,6 +16,7 @@ _target_modules = {
     "transformers.dynamic_module_utils",
     "transformers.utils",
     "flash_attn",
+    "decord",
 }  # Whitelist of modules to monitor for post-import hooks
 
 

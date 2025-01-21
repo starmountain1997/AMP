@@ -10,7 +10,7 @@ from transformers.dynamic_module_utils import get_class_in_module
 def patch_get_class_in_module(func: Callable) -> Callable:
     """
     动态修改 transformers.dynamic_module_utils.get_class_in_module 函数，
-    在返回语句之前插入 func(module, class_name) 调用。
+    在返回语句之前插入 func(module, class_name)
     """
 
     # 获取原始函数的源代码
@@ -72,7 +72,7 @@ def patch_get_class_in_module(func: Callable) -> Callable:
         get_class_in_module_patched = ori_globals["get_class_in_module"]
     elif "om_get_class_in_module" in ori_globals:
         # 适配 openmind
-        logger.warning("使用了 'om_get_class_in_module' 函数。")
+        logger.warning("using 'om_get_class_in_module' function.")
         get_class_in_module_patched = ori_globals["om_get_class_in_module"]
     else:
         raise RuntimeError("无法找到 'get_class_in_module' 或 'om_get_class_in_module' 函数。")

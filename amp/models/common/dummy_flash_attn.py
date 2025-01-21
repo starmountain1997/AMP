@@ -240,7 +240,7 @@ def create_dummy_flash_attn():
         loader=None,
         origin="<dynamic>",
     )
-    sys.modules["flash_attn"].__version__ = "0.1.0"
+    sys.modules["flash_attn"].__version__ = "0.0.1"
 
     flash_attn.layers = types.ModuleType("flash_attn.layers")
     sys.modules["flash_attn.layers"] = flash_attn.layers
@@ -274,3 +274,14 @@ def create_dummy_flash_attn():
     flash_attn.flash_attn_func = None
     flash_attn.flash_attn_varlen_func = None
     flash_attn.flash_attn_with_kvcache = None
+
+    decord = types.ModuleType("decord")
+    sys.modules["decord"] = decord
+    decord.__spec__ = importlib.machinery.ModuleSpec(
+        name="decord",
+        loader=None,
+        origin="<dynamic>",
+    )
+
+    decord.cpu = None
+    decord.VideoReader = None

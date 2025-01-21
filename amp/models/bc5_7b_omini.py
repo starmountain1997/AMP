@@ -1,6 +1,8 @@
 import importlib
 import math
 import os
+import sys
+import types
 from typing import Optional, Tuple
 
 import av
@@ -243,6 +245,11 @@ def read_video_pyav(image_path, max_frame_number, decode_way):
 def _patch_bc5_14b_omini(mod):
     package_name = mod.__name__.split(".")[-1]
 
+    decord = types.ModuleType("decord")
+    sys.modules["decord"] = decord
+    decord.cpu = None
+    decord.VideoReader = None
+
     if package_name == "modeling_baichuan":
         logger.info(f"{mod} is patched.")
         mod.flash_attention_forward = flash_attention_forward_npu
@@ -272,7 +279,7 @@ def _patch_bc5_14b_omini(mod):
         )
 
         package_split[-1] = "processor_baichuan"
-        # TODO: 做个假的decord
+
         processor_baichuan_mod = ".".join(package_split)
         processor_baichuan_mod = importlib.import_module(processor_baichuan_mod)
         processor_baichuan_mod.read_video = read_video_pyav
@@ -288,6 +295,10 @@ def _patch_bc5_14b_omini(mod):
 
 @when_imported("transformers")
 def patch_bc5_7b_omini(mod):
+    if mod.__version__ != "4.47.1":
+        logger.warning(
+            f"when running cogvlm_chat_hf, please install transformers==4.47.1, but got: {mod.__version__}"
+        )
     os.environ["ASCEND_LAUNCH_BLOCKING"] = "1"
     create_dummy_flash_attn()
 
@@ -295,7 +306,8 @@ def patch_bc5_7b_omini(mod):
     mod.modeling_flash_attention_utils._upad_input = None
     mod.modeling_flash_attention_utils.prepare_fa2_from_position_ids = None
     mod.utils.is_flash_attn_2_available = lambda: True
-    mod.utils.is_flash_attn_greater_or_equal_2_10 = lambda: False
+    mod.modeling_utils.is_flash_attn_2_available = lambda: True  # 相对路径引入
+    mod.utils.is_flash_attn_greater_or_equal_2_10 = lambda: True
     mod.models.qwen2_vl.modeling_qwen2_vl.VisionFlashAttention2.forward = (
         vision_flash_attention2_forward
     )

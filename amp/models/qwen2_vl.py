@@ -2,7 +2,8 @@ import math
 
 import torch
 import torch_npu
-from transformers.models.qwen2_vl.modeling_qwen2_vl import apply_rotary_pos_emb_vision
+from transformers.models.qwen2_vl.modeling_qwen2_vl import \
+    apply_rotary_pos_emb_vision
 
 
 def vision_flash_attention2_forward(
