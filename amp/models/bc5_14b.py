@@ -78,6 +78,8 @@ def _patch_bc5_14b(mod):
     flash_attn = types.ModuleType("flash_attn")
     flash_attn.layers = types.ModuleType("flash_attn.layers")
     flash_attn.layers.rotary = types.ModuleType("flash_attn.layers.rotary")
+    # https://github.com/Dao-AILab/flash-attention/blob/main/flash_attn/layers/rotary.py
+    # https://github.com/Dao-AILab/flash-attention/blob/main/flash_attn/ops/triton/rotary.py
     flash_attn.layers.rotary.apply_rotary_emb_func = apply_rotary_emb
 
     flash_attn.bert_padding = types.ModuleType("flash_attn.bert_padding")

@@ -9,62 +9,6 @@ from typing import Optional, Union
 import torch
 
 
-def rotary_kernel(
-    x: torch.Tensor,
-    cos: torch.Tensor,
-    sin: torch.Tensor,
-    seqlen_offsets: Union[int, torch.Tensor],
-    cu_seqlens: Optional[torch.Tensor],
-    seqlen: int,
-    rotary_dim: int,
-    seqlen_ro: int,
-    interleaved: bool = False,
-    conjugate: bool = False,
-) -> torch.Tensor:
-    batch, seqlen, nheads, headdim = x.shape
-    rotary_dim_half = rotary_dim // 2
-    output = torch.empty_like(x)
-
-    if interleaved:
-        for b in range(batch):
-            for h in range(nheads):
-                x0 = x[b, :, h, 0::2]  # Even indices
-                x1 = x[b, :, h, 1::2]  # Odd indices
-                cos_b = cos[:, :rotary_dim_half]
-                sin_b = sin[:, :rotary_dim_half]
-
-                if conjugate:
-                    sin_b = -sin_b
-
-                o0 = x0 * cos_b - x1 * sin_b
-                o1 = x0 * sin_b + x1 * cos_b
-
-                output[b, :, h, 0::2] = o0
-                output[b, :, h, 1::2] = o1
-    else:
-        for b in range(batch):
-            for h in range(nheads):
-                for m in range(seqlen):
-                    if m >= seqlen_ro:
-                        break
-
-                    x0 = x[b, m, h, :rotary_dim_half]
-                    x1 = x[b, m, h, rotary_dim_half:rotary_dim]
-                    cos_m = cos[m, :rotary_dim_half]
-                    sin_m = sin[m, :rotary_dim_half]
-
-                    if conjugate:
-                        sin_m = -sin_m
-
-                    o0 = x0 * cos_m - x1 * sin_m
-                    o1 = x0 * sin_m + x1 * cos_m
-
-                    output[b, m, h, :rotary_dim_half] = o0
-                    output[b, m, h, rotary_dim_half:rotary_dim] = o1
-
-    return output
-
-
 def apply_rotary_pytorch(
     x: torch.Tensor,
     cos: torch.Tensor,
@@ -86,54 +30,133 @@ def apply_rotary_pytorch(
         cu_seqlens: (batch + 1,) or None
         max_seqlen: int
     Returns:
-        y: (batch, seqlen, nheads, headdim)
+        y: (batch, seqlen, nheads, headdim) if cu_seqlens is None
+            else (total_seqlen, nheads, headdim)
     """
     is_varlen = cu_seqlens is not None
     if not is_varlen:
         batch, seqlen, nheads, headdim = x.shape
+        device = x.device
     else:
         assert (
             max_seqlen is not None
-        ), "If cu_seqlens is passed in, then max_seqlen must be passed"
+        ), "If cu_seqlens is provided, max_seqlen must be given"
         total_seqlen, nheads, headdim = x.shape
-        batch_p_1 = cu_seqlens.shape[0]
-        batch_p_1 - 1
+        batch_p1 = cu_seqlens.size(0)
+        batch = batch_p1 - 1
         seqlen = max_seqlen
-    seqlen_ro, rotary_dim = cos.shape
-    assert sin.shape == cos.shape
-    rotary_dim *= 2
+        device = x.device
+
+    seqlen_ro, d = cos.shape
+    rotary_dim = 2 * d
     assert rotary_dim <= headdim, "rotary_dim must be <= headdim"
-    assert headdim <= 256, "Only support headdim <= 256"
-    assert seqlen_ro >= seqlen, "seqlen_ro must be >= seqlen"
+    assert sin.shape == (seqlen_ro, d), "sin must have the same shape as cos"
+    assert x.dtype == cos.dtype == sin.dtype, "Input, cos, sin must have the same dtype"
 
-    assert (
-        cos.dtype == sin.dtype
-    ), f"cos and sin must have the same dtype, got {cos.dtype} and {sin.dtype}"
-    assert (
-        x.dtype == cos.dtype
-    ), f"Input and cos/sin must have the same dtype, got {x.dtype} and {cos.dtype}"
+    output = x if inplace else torch.empty_like(x)
+    if not inplace and rotary_dim < headdim:
+        output[..., rotary_dim:] = x[..., rotary_dim:]
 
-    cos, sin = cos.contiguous(), sin.contiguous()
+    if is_varlen:
+        for b in range(batch):
+            # Get the start and end indices for the current batch
+            start_idx = cu_seqlens[b]
+            end_idx = cu_seqlens[b + 1]
+            seqlen_b = end_idx - start_idx
+            if seqlen_b == 0:
+                continue  # Skip empty sequences
 
-    # if isinstance(seqlen_offsets, torch.Tensor):
-    #     assert seqlen_offsets.shape == (batch,)
-    #     assert seqlen_offsets.dtype in [torch.int32, torch.int64]
-    #     seqlen_offsets = seqlen_offsets.contiguous()
-    # else:
-    #     assert seqlen_offsets + seqlen <= seqlen_ro
+            # Extract the sequence for the current batch
+            x_b = x[start_idx:end_idx]  # (seqlen_b, nheads, headdim)
+            output_b = output[start_idx:end_idx]
 
-    output = rotary_kernel(
-        x,
-        cos,
-        sin,
-        seqlen_offsets,
-        cu_seqlens,
-        seqlen,
-        rotary_dim,
-        seqlen_ro,
-        interleaved,
-        conjugate,
-    )
+            # Determine the offset for the current batch
+            if isinstance(seqlen_offsets, torch.Tensor):
+                offset_b = seqlen_offsets[b]
+            else:
+                offset_b = seqlen_offsets
+
+            # Calculate positions and validate them
+            pos = torch.arange(seqlen_b, device=device) + offset_b
+            valid_pos = pos < seqlen_ro
+            pos_clamped = pos.clamp(max=seqlen_ro - 1)
+
+            # Get cos and sin values, applying validity mask
+            cos_b = cos[pos_clamped].to(device)  # (seqlen_b, d)
+            cos_b = torch.where(valid_pos.unsqueeze(-1), cos_b, 1.0)
+            sin_b = sin[pos_clamped].to(device)
+            sin_b = torch.where(valid_pos.unsqueeze(-1), sin_b, 0.0)
+
+            if conjugate:
+                sin_b = -sin_b
+
+            # Expand dimensions for broadcasting over heads
+            cos_b = cos_b.unsqueeze(1)  # (seqlen_b, 1, d)
+            sin_b = sin_b.unsqueeze(1)
+
+            # Apply rotary transformation
+            x_rot = x_b[..., :rotary_dim]
+            if interleaved:
+                x_rot_pair = x_rot.view(seqlen_b, nheads, d, 2)
+                x0, x1 = x_rot_pair.unbind(-1)
+                o0 = x0 * cos_b - x1 * sin_b
+                o1 = x0 * sin_b + x1 * cos_b
+                x_rotated = torch.stack([o0, o1], dim=-1).view(
+                    seqlen_b, nheads, rotary_dim
+                )
+            else:
+                x0 = x_rot[..., :d]
+                x1 = x_rot[..., d:]
+                o0 = x0 * cos_b - x1 * sin_b
+                o1 = x0 * sin_b + x1 * cos_b
+                x_rotated = torch.cat([o0, o1], dim=-1)
+
+            output_b[..., :rotary_dim] = x_rotated
+    else:
+        # Calculate positions for all batches and sequence elements
+        if isinstance(seqlen_offsets, torch.Tensor):
+            assert (
+                seqlen_offsets.size(0) == batch
+            ), "seqlen_offsets must have size (batch,)"
+            offsets = seqlen_offsets.view(batch, 1)
+        else:
+            offsets = torch.tensor(seqlen_offsets, device=device).view(1, 1)
+
+        pos = torch.arange(seqlen, device=device).view(1, seqlen) + offsets
+        valid_pos = pos < seqlen_ro
+        pos_clamped = pos.clamp(max=seqlen_ro - 1)
+
+        # Gather cos and sin values, applying validity mask
+        cos_pos = cos[pos_clamped].to(device)  # (batch, seqlen, d)
+        cos_pos = torch.where(valid_pos.unsqueeze(-1), cos_pos, 1.0)
+        sin_pos = sin[pos_clamped].to(device)
+        sin_pos = torch.where(valid_pos.unsqueeze(-1), sin_pos, 0.0)
+
+        if conjugate:
+            sin_pos = -sin_pos
+
+        # Expand dimensions for broadcasting over heads
+        cos_pos = cos_pos.unsqueeze(2)  # (batch, seqlen, 1, d)
+        sin_pos = sin_pos.unsqueeze(2)
+
+        # Apply rotary transformation
+        x_rot = x[..., :rotary_dim]
+        if interleaved:
+            x_rot_pair = x_rot.view(batch, seqlen, nheads, d, 2)
+            x0, x1 = x_rot_pair.unbind(-1)
+            o0 = x0 * cos_pos - x1 * sin_pos
+            o1 = x0 * sin_pos + x1 * cos_pos
+            x_rotated = torch.stack([o0, o1], dim=-1).view(
+                batch, seqlen, nheads, rotary_dim
+            )
+        else:
+            x0 = x_rot[..., :d]
+            x1 = x_rot[..., d:]
+            o0 = x0 * cos_pos - x1 * sin_pos
+            o1 = x0 * sin_pos + x1 * cos_pos
+            x_rotated = torch.cat([o0, o1], dim=-1)
+
+        output[..., :rotary_dim] = x_rotated
 
     return output
 
