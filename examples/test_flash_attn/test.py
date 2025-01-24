@@ -1,4 +1,3 @@
-from dummy_fa_openai import apply_rotary_pytorch
 from flash_attn.ops.triton.rotary import apply_rotary
 import torch
 

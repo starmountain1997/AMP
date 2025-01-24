@@ -11,7 +11,7 @@ from loguru import logger
 
 from ..common.patch_transformers import patch_get_class_in_module
 from ..module_patcher import when_imported
-from .common.dummy_flash_attn import apply_rotary_emb
+from .common.dummy_flash_attn import create_dummy_flash_attn
 
 # https://www.hiascend.com/document/detail/zh/Pytorch/60RC1/ptmoddevg/trainingmigrguide/performance_tuning_0027.html
 
@@ -72,38 +72,16 @@ def flash_attention_forward_npu(
     return attn_output
 
 
-def _patch_bc5_14b(mod):
+def _patch_baichuan_m1_14b(mod):
     package_name = mod.__name__.split(".")[-1]
-    # Create a dummy `xformers` module
-    flash_attn = types.ModuleType("flash_attn")
-    flash_attn.layers = types.ModuleType("flash_attn.layers")
-    flash_attn.layers.rotary = types.ModuleType("flash_attn.layers.rotary")
-    # https://github.com/Dao-AILab/flash-attention/blob/main/flash_attn/layers/rotary.py
-    # https://github.com/Dao-AILab/flash-attention/blob/main/flash_attn/ops/triton/rotary.py
-    flash_attn.layers.rotary.apply_rotary_emb_func = apply_rotary_emb
-
-    flash_attn.bert_padding = types.ModuleType("flash_attn.bert_padding")
-    flash_attn.bert_padding.index_first_axis = (
-        None  # Replace with actual function if needed
-    )
-    flash_attn.bert_padding.pad_input = None  # Replace with actual function if needed
-    flash_attn.bert_padding.unpad_input = None  # Replace with actual function if needed
-    flash_attn.flash_attn_func = None
-    flash_attn.flash_attn_varlen_func = None
-    flash_attn.flash_attn_with_kvcache = None
-
-    sys.modules["flash_attn"] = flash_attn
-    sys.modules["flash_attn.bert_padding"] = flash_attn.bert_padding
-    sys.modules["flash_attn.layers"] = flash_attn.layers
-    sys.modules["flash_attn.layers.rotary"] = flash_attn.layers.rotary
-
+    create_dummy_flash_attn()
     if package_name == "modeling_baichuan":
         logger.info(f"{mod} is patched.")
         mod.flash_attention_forward = flash_attention_forward_npu
 
 
 @when_imported("transformers")
-def patch_bc5_14b(mod):
+def patch_baichuan_m1_14b(mod):
     os.environ["ASCEND_LAUNCH_BLOCKING"] = "1"
     mod.modeling_flash_attention_utils._flash_supports_window_size = None
     mod.modeling_flash_attention_utils._upad_input = None
@@ -111,5 +89,5 @@ def patch_bc5_14b(mod):
     mod.utils.is_flash_attn_2_available = lambda: True
     mod.utils.is_flash_attn_greater_or_equal_2_10 = lambda: False
 
-    get_class_in_module_patched = patch_get_class_in_module(func=_patch_bc5_14b)
+    get_class_in_module_patched = patch_get_class_in_module(func=_patch_baichuan_m1_14b)
     mod.dynamic_module_utils.get_class_in_module = get_class_in_module_patched

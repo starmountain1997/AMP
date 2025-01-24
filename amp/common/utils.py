@@ -13,7 +13,6 @@ def download_from_modelers(model_name: str):
     logger.info(f"model_path: {model_path}")
     return model_path
 
-
 def create_dummy_module(name, attributes=None):
     """
     Creates a dummy module with the given name and optional attributes.
@@ -27,6 +26,3 @@ def create_dummy_module(name, attributes=None):
     sys.modules[name] = module
     return module
 
-
-if __name__ == "__main__":
-    download_from_modelers("model_temp/7b_omini")
