@@ -59,7 +59,9 @@ def patch_get_class_in_module(func: Callable) -> Callable:
             # 使用 astor 库处理 Python 3.8 及以下版本
             modified_code = astor.to_source(modified_tree)
         else:
-            raise RuntimeError("无法将 AST 转换回源代码。请确保安装了 'astor' 库，或使用 Python 3.9 及以上版本。")
+            raise RuntimeError(
+                "无法将 AST 转换回源代码。请确保安装了 'astor' 库，或使用 Python 3.9 及以上版本。"
+            )
 
     # 准备执行环境，将 func 添加到命名空间中
     ori_globals = ori_get_class_in_module.__globals__
@@ -75,7 +77,9 @@ def patch_get_class_in_module(func: Callable) -> Callable:
         logger.warning("using 'om_get_class_in_module' function.")
         get_class_in_module_patched = ori_globals["om_get_class_in_module"]
     else:
-        raise RuntimeError("无法找到 'get_class_in_module' 或 'om_get_class_in_module' 函数。")
+        raise RuntimeError(
+            "无法找到 'get_class_in_module' 或 'om_get_class_in_module' 函数。"
+        )
 
     # Retrieve the patched function from globals
 

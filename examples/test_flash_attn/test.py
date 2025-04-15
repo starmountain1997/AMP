@@ -1,5 +1,6 @@
-from flash_attn.ops.triton.rotary import apply_rotary
 import torch
+from flash_attn.ops.triton.rotary import apply_rotary
+
 
 def test_apply_rotary_pytorch():
     batch = 2
@@ -9,12 +10,12 @@ def test_apply_rotary_pytorch():
     rotary_dim = 4
     seqlen_ro = 4
 
-    device="cuda"
+    device = "cuda"
 
-    x = torch.rand(batch, seqlen, nheads, headdim, dtype=torch.float32,device=device)
+    x = torch.rand(batch, seqlen, nheads, headdim, dtype=torch.float32, device=device)
 
-    cos = torch.rand(seqlen_ro, rotary_dim // 2, dtype=torch.float32,device=device)
-    sin = torch.rand(seqlen_ro, rotary_dim // 2, dtype=torch.float32,device=device)
+    cos = torch.rand(seqlen_ro, rotary_dim // 2, dtype=torch.float32, device=device)
+    sin = torch.rand(seqlen_ro, rotary_dim // 2, dtype=torch.float32, device=device)
 
     seqlen_offsets = 0  # Can also be a tensor of shape (batch,)
     cu_seqlens = None  # Can also be a tensor of shape (batch + 1,)
@@ -49,10 +50,10 @@ def test_apply_rotary_pytorch():
 
     print("\nOutput1:")
     print(output_1)
-    
+
     print("\nOutput2:")
     print(output_2)
-    
 
-if __name__=="__main__":
+
+if __name__ == "__main__":
     test_apply_rotary_pytorch()

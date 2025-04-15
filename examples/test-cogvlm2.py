@@ -63,9 +63,11 @@ inputs = {
     "input_ids": input_by_model["input_ids"].unsqueeze(0).to(DEVICE),
     "token_type_ids": input_by_model["token_type_ids"].unsqueeze(0).to(DEVICE),
     "attention_mask": input_by_model["attention_mask"].unsqueeze(0).to(DEVICE),
-    "images": [[input_by_model["images"][0].to(DEVICE).to(TORCH_TYPE)]]
-    if image is not None
-    else None,
+    "images": (
+        [[input_by_model["images"][0].to(DEVICE).to(TORCH_TYPE)]]
+        if image is not None
+        else None
+    ),
 }
 gen_kwargs = {
     "max_new_tokens": 2048,

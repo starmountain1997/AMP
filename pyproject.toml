@@ -17,6 +17,8 @@ peft = "^0.14.0"
 apex = "^0.9.10.dev0"
 pyramid = "1.5"
 click = "^8.1.8"
+openmind-hub = "^0.9.1"
+modelscope = "^1.25.0"
 
 [build-system]
 requires = ["poetry-core"]

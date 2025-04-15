@@ -1,5 +1,7 @@
 from typing import Optional, Union
+
 import torch
+
 
 def rotary_kernel(
     x: torch.Tensor,
