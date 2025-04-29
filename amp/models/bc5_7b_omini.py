@@ -218,7 +218,8 @@ def read_video_pyav(image_path, max_frame_number, decode_way):
                 for frame in container.decode(stream):
                     image = np.array(frame.to_image())
                     frames.append(image)
-                    frame_time = int(frame.time * 1000)  # Convert to milliseconds
+                    # Convert to milliseconds
+                    frame_time = int(frame.time * 1000)
                     frame_times.append(frame_time)
 
         except Exception as e:
@@ -297,7 +298,8 @@ def _patch_bc5_14b_omini(mod):
 def patch_bc5_7b_omini(mod):
     if mod.__version__ != "4.47.1":
         logger.warning(
-            f"when running cogvlm_chat_hf, please install transformers==4.47.1, but got: {mod.__version__}"
+            f"when running cogvlm_chat_hf, please install transformers==4.47.1, but got: {
+                mod.__version__}"
         )
     os.environ["ASCEND_LAUNCH_BLOCKING"] = "1"
     create_dummy_flash_attn()

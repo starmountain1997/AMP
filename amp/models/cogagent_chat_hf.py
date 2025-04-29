@@ -213,7 +213,8 @@ def patch_cogagent_chat_hf(mod):
         # https://github.com/THUDM/GLM-4/issues/439
         # https://modelers.cn/models/openMind-ecosystem/cogagent-chat-hf
         logger.warning(
-            f"when running cogagent_chat_hf, please install transformers==4.40.2, but got: {mod.__version__}"
+            f"when running cogagent_chat_hf, please install transformers==4.40.2, but got: {
+                mod.__version__}"
         )
 
     os.environ["TASK_QUEUE_ENABLE"] = "2"

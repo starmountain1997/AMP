@@ -196,7 +196,8 @@ def _patch_chatglm2_32k(mod):
 def patch_chatglm2_32k(mod):
     if mod.__version__ != "4.30.2":
         logger.warning(
-            f"when running chatglm2_32k, please install transformers==4.30.2, but got: {mod.__version__}"
+            f"when running chatglm2_32k, please install transformers==4.30.2, but got: {
+                mod.__version__}"
         )
 
     get_class_in_module_patched = patch_get_class_in_module(func=_patch_chatglm2_32k)

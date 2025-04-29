@@ -34,7 +34,8 @@ class IndexPutTransformer(ast.NodeTransformer):
                         "inputs_embeds = (inputs_embeds * (1 - mask)) + images_features * mask"
                     ).body[0]
 
-                    # Return a list of new statements to replace the single `Assign`
+                    # Return a list of new statements to replace the single
+                    # `Assign`
                     return [mask_assign, embeds_assign]
         return node
 

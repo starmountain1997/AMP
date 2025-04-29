@@ -180,7 +180,8 @@ def patch_cogvlm_chat_hf(mod):
         # https://github.com/THUDM/GLM-4/issues/439
         # https://modelers.cn/models/openMind-ecosystem/cogagent-chat-hf
         logger.warning(
-            f"when running cogvlm_chat_hf, please install transformers==4.40.2, but got: {mod.__version__}"
+            f"when running cogvlm_chat_hf, please install transformers==4.40.2, but got: {
+                mod.__version__}"
         )
 
     get_class_in_module_patched = patch_get_class_in_module(func=_patch_cogvlm_chat_hf)

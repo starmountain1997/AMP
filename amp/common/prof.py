@@ -107,7 +107,9 @@ def measure_performance(
 
     generated_text = "".join(generated_tokens)
     logger.info(
-        f"TTFT: {ttft:.3f} s, TPS: {tps:.3f} tokens/s.\n\nresponse:\n{generated_text}"
+        f"TTFT: {
+            ttft:.3f} s, TPS: {
+            tps:.3f} tokens/s.\n\nresponse:\n{generated_text}"
     )
 
     return ttft, tps, generated_text

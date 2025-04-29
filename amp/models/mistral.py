@@ -194,4 +194,5 @@ def patch_mistral(mod):
     logger.info("patched mistral")
     mod.models.mistral.modeling_mistral.MistralRMSNorm.forward = mistal_rms_norm_forward
     mod.models.mistral.modeling_mistral.apply_rotary_pos_emb = npu_apply_rotary_pos_emb
-    # mod.models.mistral.modeling_mistral.Attention.forward = mistal_attention_forward   性能减速
+    # mod.models.mistral.modeling_mistral.Attention.forward =
+    # mistal_attention_forward   性能减速
