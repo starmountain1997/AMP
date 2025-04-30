@@ -1,5 +1,6 @@
 import html  # Import the html module for escaping
 import json
+import os
 import uuid
 from typing import Dict, List
 
@@ -9,9 +10,9 @@ from loguru import logger
 
 # https://huggingface.co/spaces/ysharma/gradio_chatbot_thinking/tree/main
 
-URL = "http://10.77.245.193:8000/v1/chat/completions"
-API_KEY = None
-MODEL = "Qwen/Qwen3-1.7B"
+URL = "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
+API_KEY = os.getenv("API_KEY")
+MODEL = "ep-20250218105618-2vxvq"
 
 TITLE = "Qwen/Qwen3-1.7B"
 DESCRIPTION = "Qwen/Qwen3-1.7B 是 Qwen 系列中的推理模型..."
@@ -179,7 +180,8 @@ if __name__ == "__main__":
             )
 
         def user(user_message, history):
-            return "", history + [[user_message, None]]
+            history_with_user = history + [[user_message, None]]
+            return "", history_with_user, history_with_user
 
         def bot(history, temperature_value, top_p_value, max_tokens_value, session_id):
             if not history or not history[-1][0]:
@@ -231,7 +233,7 @@ if __name__ == "__main__":
                 # Yield the final state one more time
                 yield history, session_id, history
 
-        user_outputs = [msg, chat_history]
+        user_outputs = [msg, chat_history, chatbot]
         bot_outputs = [chat_history, session_id, chatbot]
 
         msg.submit(
