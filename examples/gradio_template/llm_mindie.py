@@ -86,32 +86,38 @@ def chat(content, history, temperature=0.7, top_p=0.9, max_tokens=8192):
 
     full_response = ""
     reasoning_response = ""
+    content_update = True
+    reasoning_update = False
     try:
         for line in response.iter_lines():
             if line:
                 try:
                     line = line.decode("utf-8")
-                    logger.debug(line)
                     if line.startswith("data: "):
                         line = line[6:]
                         if line.strip() == "[DONE]":
                             break
                         chunk = json.loads(line)
+                        logger.debug(chunk)
                         if "choices" in chunk and len(chunk["choices"]) > 0:
                             delta = chunk["choices"][0].get("delta", {})
-                            content_update = False
-                            reasoning_update = False
 
                             if "content" in delta and delta["content"] is not None:
-                                full_response += delta["content"]
-                                content_update = True
-
-                            if (
-                                "reasoning_content" in delta
-                                and delta["reasoning_content"] is not None
-                            ):
-                                reasoning_response += delta["reasoning_content"]
-                                reasoning_update = True
+                                if delta["content"] == "<think>":
+                                    reasoning_update = True
+                                    content_update = False
+                                elif delta["content"] == "</think>":
+                                    reasoning_update = False
+                                    content_update = True
+                                else:
+                                    if reasoning_update and not content_update:
+                                        reasoning_response += delta["content"]
+                                    elif not reasoning_update and content_update:
+                                        full_response += delta["content"]
+                                    else:
+                                        raise Exception(
+                                            "cannot update full_response and reasoning_response at same time"
+                                        )
 
                             if content_update or reasoning_update:
                                 yield full_response, reasoning_response  # Yield both current states
